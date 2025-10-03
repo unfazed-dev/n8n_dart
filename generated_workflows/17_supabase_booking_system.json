@@ -4,7 +4,7 @@
   "version": 1.0,
   "nodes": [
     {
-      "id": "1759505380622_149",
+      "id": "1759506004771_149",
       "name": "Booking Request",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1,
@@ -19,7 +19,7 @@
       }
     },
     {
-      "id": "1759505380622_150",
+      "id": "1759506004771_150",
       "name": "Validate & Prepare",
       "type": "n8n-nodes-base.function",
       "typeVersion": 1,
@@ -32,7 +32,7 @@
       }
     },
     {
-      "id": "1759505380622_151",
+      "id": "1759506004771_151",
       "name": "Check Availability",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 1,
@@ -56,7 +56,7 @@
       }
     },
     {
-      "id": "1759505380622_152",
+      "id": "1759506004771_152",
       "name": "Evaluate Availability",
       "type": "n8n-nodes-base.function",
       "typeVersion": 1,
@@ -69,7 +69,7 @@
       }
     },
     {
-      "id": "1759505380622_153",
+      "id": "1759506004771_153",
       "name": "Slot Available?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 1,
@@ -88,7 +88,7 @@
       }
     },
     {
-      "id": "1759505380622_154",
+      "id": "1759506004771_154",
       "name": "Return Conflict",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
@@ -107,7 +107,7 @@
       }
     },
     {
-      "id": "1759505380622_155",
+      "id": "1759506004771_155",
       "name": "Create Booking in Supabase",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 1,
@@ -139,7 +139,7 @@
       }
     },
     {
-      "id": "1759505380622_156",
+      "id": "1759506004771_156",
       "name": "Get Service Details",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 1,
@@ -157,7 +157,7 @@
       }
     },
     {
-      "id": "1759505380622_157",
+      "id": "1759506004771_157",
       "name": "Prepare Confirmation Data",
       "type": "n8n-nodes-base.function",
       "typeVersion": 1,
@@ -170,7 +170,7 @@
       }
     },
     {
-      "id": "1759505380622_158",
+      "id": "1759506004771_158",
       "name": "Save Confirmation Code",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 1,
@@ -192,7 +192,7 @@
       }
     },
     {
-      "id": "1759505380622_159",
+      "id": "1759506004771_159",
       "name": "Send Confirmation Email",
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 1,
@@ -208,7 +208,7 @@
       }
     },
     {
-      "id": "1759505380622_160",
+      "id": "1759506004771_160",
       "name": "Check SMS Eligibility",
       "type": "n8n-nodes-base.function",
       "typeVersion": 1,
@@ -221,7 +221,7 @@
       }
     },
     {
-      "id": "1759505380622_161",
+      "id": "1759506004771_161",
       "name": "Notify via Supabase Realtime",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 1,
@@ -246,7 +246,7 @@
       }
     },
     {
-      "id": "1759505380622_162",
+      "id": "1759506004771_162",
       "name": "Notify Team",
       "type": "n8n-nodes-base.slack",
       "typeVersion": 1,
@@ -266,7 +266,7 @@
       }
     },
     {
-      "id": "1759505380622_163",
+      "id": "1759506004771_163",
       "name": "Return Success",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,

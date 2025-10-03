@@ -1,0 +1,587 @@
+{
+  "name": "Stripe Payment to Booking & Invoice",
+  "active": true,
+  "version": 1.0,
+  "nodes": [
+    {
+      "id": "1759506004774_180",
+      "name": "Stripe Checkout Completed",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        100.0,
+        200.0
+      ],
+      "parameters": {
+        "path": "stripe/checkout/completed",
+        "method": "POST",
+        "authentication": "none"
+      }
+    },
+    {
+      "id": "1759506004774_181",
+      "name": "Validate Stripe Webhook",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        350.0,
+        200.0
+      ],
+      "parameters": {
+        "functionCode": "const event = $input.item.json;\n\n// Verify event type\nif (event.type !== 'checkout.session.completed') {\n  throw new Error('Unsupported event type: ' + event.type);\n}\n\nconst session = event.data.object;\n\n// Extract booking metadata from Stripe session\nreturn {\n  stripe_session_id: session.id,\n  stripe_customer_id: session.customer,\n  stripe_payment_intent: session.payment_intent,\n  stripe_amount_total: session.amount_total / 100, // Convert cents to dollars\n  stripe_currency: session.currency.toUpperCase(),\n  payment_status: session.payment_status,\n\n  // Booking data from Stripe metadata\n  customer_email: session.customer_details?.email || session.customer_email,\n  customer_name: session.customer_details?.name || session.metadata?.customer_name,\n  customer_phone: session.customer_details?.phone || session.metadata?.customer_phone,\n  service_id: session.metadata?.service_id,\n  booking_date: session.metadata?.booking_date,\n  booking_time: session.metadata?.booking_time,\n  duration_minutes: parseInt(session.metadata?.duration_minutes) || 60,\n  notes: session.metadata?.notes || '',\n\n  timestamp: new Date().toISOString()\n};\n"
+      }
+    },
+    {
+      "id": "1759506004774_182",
+      "name": "Payment Successful?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        600.0,
+        200.0
+      ],
+      "parameters": {
+        "conditions": [
+          {
+            "leftValue": "={{$json.payment_status}}",
+            "operation": "equals",
+            "rightValue": "paid"
+          }
+        ]
+      }
+    },
+    {
+      "id": "1759506004774_183",
+      "name": "Log Failed Payment",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        100.0,
+        300.0
+      ],
+      "parameters": {
+        "url": "https://your-project.supabase.co/rest/v1/payment_logs",
+        "method": "POST",
+        "headers": {
+          "apikey": "your-supabase-anon-key",
+          "Authorization": "Bearer your-supabase-anon-key",
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "stripe_session_id": "={{$json.stripe_session_id}}",
+          "status": "failed",
+          "amount": "={{$json.stripe_amount_total}}",
+          "currency": "={{$json.stripe_currency}}",
+          "error": "Payment not completed"
+        }
+      }
+    },
+    {
+      "id": "1759506004774_184",
+      "name": "Return Payment Failed",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        350.0,
+        300.0
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseCode": 400,
+        "responseBody": {
+          "success": false,
+          "error": "Payment not completed"
+        }
+      }
+    },
+    {
+      "id": "1759506004774_185",
+      "name": "Create Booking in Supabase",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        100.0,
+        400.0
+      ],
+      "parameters": {
+        "url": "https://your-project.supabase.co/rest/v1/bookings",
+        "method": "POST",
+        "headers": {
+          "apikey": "your-supabase-anon-key",
+          "Authorization": "Bearer your-supabase-anon-key",
+          "Content-Type": "application/json",
+          "Prefer": "return=representation"
+        },
+        "body": {
+          "customer_name": "={{$json.customer_name}}",
+          "customer_email": "={{$json.customer_email}}",
+          "customer_phone": "={{$json.customer_phone}}",
+          "service_id": "={{$json.service_id}}",
+          "booking_date": "={{$json.booking_date}}",
+          "booking_time": "={{$json.booking_time}}",
+          "duration_minutes": "={{$json.duration_minutes}}",
+          "notes": "={{$json.notes}}",
+          "status": "confirmed",
+          "payment_status": "paid",
+          "stripe_session_id": "={{$json.stripe_session_id}}",
+          "stripe_payment_intent": "={{$json.stripe_payment_intent}}",
+          "amount_paid": "={{$json.stripe_amount_total}}",
+          "currency": "={{$json.stripe_currency}}"
+        }
+      }
+    },
+    {
+      "id": "1759506004774_186",
+      "name": "Get Service Details",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        350.0,
+        400.0
+      ],
+      "parameters": {
+        "url": "https://your-project.supabase.co/rest/v1/services?id=eq.{{$json.service_id}}&select=*&limit=1",
+        "method": "GET",
+        "headers": {
+          "apikey": "your-supabase-anon-key",
+          "Authorization": "Bearer your-supabase-anon-key"
+        }
+      }
+    },
+    {
+      "id": "1759506004774_187",
+      "name": "Prepare Booking Confirmation",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        600.0,
+        400.0
+      ],
+      "parameters": {
+        "functionCode": "const paymentData = $input.first().json;\nconst booking = $input.item(1).json[0];\nconst service = $input.last().json[0];\n\n// Generate confirmation code\nconst confirmationCode = Math.random().toString(36).substring(2, 8).toUpperCase();\n\nreturn {\n  // Payment info\n  stripe_session_id: paymentData.stripe_session_id,\n  stripe_payment_intent: paymentData.stripe_payment_intent,\n  amount_paid: paymentData.stripe_amount_total,\n  currency: paymentData.stripe_currency,\n\n  // Booking info\n  booking_id: booking.id,\n  confirmation_code: confirmationCode,\n  customer_name: booking.customer_name,\n  customer_email: booking.customer_email,\n  customer_phone: booking.customer_phone,\n  booking_date: booking.booking_date,\n  booking_time: booking.booking_time,\n  duration_minutes: booking.duration_minutes,\n  notes: booking.notes,\n\n  // Service info\n  service_id: service.id,\n  service_name: service.name,\n  service_description: service.description,\n  service_price: service.price,\n  hourly_rate: service.hourly_rate || 100\n};\n"
+      }
+    },
+    {
+      "id": "1759506004774_188",
+      "name": "Update Booking Confirmation",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        850.0,
+        400.0
+      ],
+      "parameters": {
+        "url": "https://your-project.supabase.co/rest/v1/bookings?id=eq.{{$json.booking_id}}",
+        "method": "PATCH",
+        "headers": {
+          "apikey": "your-supabase-anon-key",
+          "Authorization": "Bearer your-supabase-anon-key",
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "confirmation_code": "={{$json.confirmation_code}}",
+          "status": "confirmed"
+        }
+      }
+    },
+    {
+      "id": "1759506004774_189",
+      "name": "Calculate Invoice",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        1100.0,
+        400.0
+      ],
+      "parameters": {
+        "functionCode": "const data = $input.item.json;\n\n// Use actual Stripe payment amount\nconst subtotal = data.amount_paid / 1.10; // Reverse calculate if tax included\nconst tax_rate = 0.10;\nconst tax_amount = subtotal * tax_rate;\nconst total = data.amount_paid;\n\n// Generate invoice number\nconst invoice_number = `INV-${new Date().getFullYear()}-${String(Date.now()).slice(-6)}`;\nconst invoice_date = new Date().toISOString().split('T')[0];\nconst due_date = invoice_date; // Already paid via Stripe\n\nreturn {\n  ...data,\n  invoice_number: invoice_number,\n  invoice_date: invoice_date,\n  due_date: due_date,\n  subtotal: subtotal.toFixed(2),\n  tax_rate: (tax_rate * 100).toFixed(0),\n  tax_amount: tax_amount.toFixed(2),\n  total: total.toFixed(2),\n  payment_method: 'Stripe',\n  invoice_status: 'paid' // Already paid via Stripe\n};\n"
+      }
+    },
+    {
+      "id": "1759506004774_190",
+      "name": "Create Invoice in Supabase",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        1350.0,
+        400.0
+      ],
+      "parameters": {
+        "url": "https://your-project.supabase.co/rest/v1/invoices",
+        "method": "POST",
+        "headers": {
+          "apikey": "your-supabase-anon-key",
+          "Authorization": "Bearer your-supabase-anon-key",
+          "Content-Type": "application/json",
+          "Prefer": "return=representation"
+        },
+        "body": {
+          "booking_id": "={{$json.booking_id}}",
+          "invoice_number": "={{$json.invoice_number}}",
+          "invoice_date": "={{$json.invoice_date}}",
+          "due_date": "={{$json.due_date}}",
+          "subtotal": "={{$json.subtotal}}",
+          "tax_rate": "={{$json.tax_rate}}",
+          "tax_amount": "={{$json.tax_amount}}",
+          "total": "={{$json.total}}",
+          "currency": "={{$json.currency}}",
+          "status": "paid",
+          "payment_method": "Stripe",
+          "stripe_session_id": "={{$json.stripe_session_id}}",
+          "stripe_payment_intent": "={{$json.stripe_payment_intent}}",
+          "paid_at": "={{$json.invoice_date}}",
+          "line_items": [
+            {
+              "description": "={{$json.service_name}}",
+              "quantity": "={{$json.duration_minutes}}",
+              "unit": "minutes",
+              "rate": "={{$json.hourly_rate}}",
+              "amount": "={{$json.subtotal}}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "1759506004774_191",
+      "name": "Prepare Email Data",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        1600.0,
+        400.0
+      ],
+      "parameters": {
+        "functionCode": "const data = $input.first().json;\nconst invoice = $input.last().json[0];\n\nreturn {\n  ...data,\n  invoice_id: invoice.id,\n  invoice_url: `https://example.com/invoices/${data.invoice_number}`,\n  receipt_url: `https://example.com/receipts/${data.stripe_session_id}`\n};\n"
+      }
+    },
+    {
+      "id": "1759506004774_192",
+      "name": "Send Confirmation & Receipt",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 1,
+      "position": [
+        1850.0,
+        400.0
+      ],
+      "parameters": {
+        "fromEmail": "bookings@example.com",
+        "toEmail": "={{$json.customer_email}}",
+        "subject": "Payment Confirmed - Booking {{$json.confirmation_code}}",
+        "message": "Hi {{$json.customer_name}},\n\nThank you for your payment! Your booking is confirmed. ✅\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n💳 PAYMENT CONFIRMATION\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\nAmount Paid: ${{$json.total}} {{$json.currency}}\nPayment Method: Stripe\nTransaction ID: {{$json.stripe_payment_intent}}\nPayment Status: PAID ✓\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n📅 BOOKING DETAILS\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\nConfirmation Code: {{$json.confirmation_code}}\nService: {{$json.service_name}}\nDate: {{$json.booking_date}}\nTime: {{$json.booking_time}}\nDuration: {{$json.duration_minutes}} minutes\n\nNotes: {{$json.notes}}\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n📄 INVOICE & RECEIPT\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\nInvoice #: {{$json.invoice_number}}\nInvoice: {{$json.invoice_url}}\nReceipt: {{$json.receipt_url}}\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\nNeed to reschedule? Use your confirmation code.\n\nQuestions? Reply to this email.\n\nSee you soon!\n\nBest regards,\nYour Team\n"
+      }
+    },
+    {
+      "id": "1759506004774_193",
+      "name": "Notify Accounting",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 1,
+      "position": [
+        2100.0,
+        400.0
+      ],
+      "parameters": {
+        "fromEmail": "billing@example.com",
+        "toEmail": "accounting@example.com",
+        "subject": "Stripe Payment Received: {{$json.invoice_number}} - ${{$json.total}}",
+        "message": "Stripe payment processed and invoice generated:\n\nCustomer: {{$json.customer_name}} ({{$json.customer_email}})\nBooking: {{$json.confirmation_code}}\nService: {{$json.service_name}}\n\nPayment Details:\n• Amount: ${{$json.total}} {{$json.currency}}\n• Method: Stripe\n• Session ID: {{$json.stripe_session_id}}\n• Payment Intent: {{$json.stripe_payment_intent}}\n• Status: PAID\n\nInvoice #: {{$json.invoice_number}}\nView: {{$json.invoice_url}}\n"
+      }
+    },
+    {
+      "id": "1759506004774_194",
+      "name": "Update Customer Stripe ID",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        2350.0,
+        400.0
+      ],
+      "parameters": {
+        "url": "https://your-project.supabase.co/rest/v1/customers?email=eq.{{$json.customer_email}}",
+        "method": "PATCH",
+        "headers": {
+          "apikey": "your-supabase-anon-key",
+          "Authorization": "Bearer your-supabase-anon-key",
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "stripe_customer_id": "={{$json.stripe_customer_id}}",
+          "last_payment_at": "={{$json.invoice_date}}"
+        }
+      }
+    },
+    {
+      "id": "1759506004774_195",
+      "name": "Log Payment Activity",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        2600.0,
+        400.0
+      ],
+      "parameters": {
+        "url": "https://your-project.supabase.co/rest/v1/activity_logs",
+        "method": "POST",
+        "headers": {
+          "apikey": "your-supabase-anon-key",
+          "Authorization": "Bearer your-supabase-anon-key",
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "type": "stripe_payment_completed",
+          "booking_id": "={{$json.booking_id}}",
+          "invoice_id": "={{$json.invoice_id}}",
+          "metadata": {
+            "stripe_session_id": "={{$json.stripe_session_id}}",
+            "stripe_payment_intent": "={{$json.stripe_payment_intent}}",
+            "amount": "={{$json.total}}",
+            "currency": "={{$json.currency}}",
+            "invoice_number": "={{$json.invoice_number}}"
+          }
+        }
+      }
+    },
+    {
+      "id": "1759506004774_196",
+      "name": "Notify Team",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 1,
+      "position": [
+        2850.0,
+        400.0
+      ],
+      "parameters": {
+        "channel": "#bookings",
+        "text": "💰 Stripe Payment: ${{$json.total}} {{$json.currency}} | {{$json.customer_name}} - {{$json.service_name}} | Booking: {{$json.confirmation_code}} | Invoice: {{$json.invoice_number}}"
+      },
+      "credentials": {
+        "slackApi": {
+          "id": "credential_id",
+          "name": "Slack"
+        }
+      }
+    },
+    {
+      "id": "1759506004774_197",
+      "name": "Return Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        3100.0,
+        400.0
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseCode": 200,
+        "responseBody": {
+          "success": true,
+          "booking_id": "={{$json.booking_id}}",
+          "confirmation_code": "={{$json.confirmation_code}}",
+          "invoice_id": "={{$json.invoice_id}}",
+          "invoice_number": "={{$json.invoice_number}}",
+          "stripe_session_id": "={{$json.stripe_session_id}}",
+          "amount_paid": "={{$json.total}}",
+          "currency": "={{$json.currency}}",
+          "message": "Payment processed, booking confirmed, and invoice generated"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Stripe Checkout Completed": {
+      "main": [
+        [
+          {
+            "node": "Validate Stripe Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Stripe Webhook": {
+      "main": [
+        [
+          {
+            "node": "Payment Successful?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Payment Successful?": {
+      "main": [
+        [
+          {
+            "node": "Create Booking in Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Failed Payment",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Failed Payment": {
+      "main": [
+        [
+          {
+            "node": "Return Payment Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Booking in Supabase": {
+      "main": [
+        [
+          {
+            "node": "Get Service Details",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Service Details": {
+      "main": [
+        [
+          {
+            "node": "Prepare Booking Confirmation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Booking Confirmation": {
+      "main": [
+        [
+          {
+            "node": "Update Booking Confirmation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Booking Confirmation": {
+      "main": [
+        [
+          {
+            "node": "Calculate Invoice",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate Invoice": {
+      "main": [
+        [
+          {
+            "node": "Create Invoice in Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Invoice in Supabase": {
+      "main": [
+        [
+          {
+            "node": "Prepare Email Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Email Data": {
+      "main": [
+        [
+          {
+            "node": "Send Confirmation & Receipt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Confirmation & Receipt": {
+      "main": [
+        [
+          {
+            "node": "Notify Accounting",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify Accounting": {
+      "main": [
+        [
+          {
+            "node": "Update Customer Stripe ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Customer Stripe ID": {
+      "main": [
+        [
+          {
+            "node": "Log Payment Activity",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Payment Activity": {
+      "main": [
+        [
+          {
+            "node": "Notify Team",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify Team": {
+      "main": [
+        [
+          {
+            "node": "Return Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionMode": "sequential",
+    "timezone": "UTC"
+  },
+  "tags": [
+    "stripe",
+    "supabase",
+    "booking",
+    "invoice",
+    "payment",
+    "e-commerce"
+  ]
+}
