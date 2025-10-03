@@ -1,0 +1,491 @@
+{
+  "name": "Supabase Booking & Invoice System",
+  "active": true,
+  "version": 1.0,
+  "nodes": [
+    {
+      "id": "1759505380623_164",
+      "name": "Booking Completed",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        100.0,
+        200.0
+      ],
+      "parameters": {
+        "path": "supabase/bookings/complete",
+        "method": "POST",
+        "authentication": "none"
+      }
+    },
+    {
+      "id": "1759505380623_165",
+      "name": "Validate Booking ID",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        350.0,
+        200.0
+      ],
+      "parameters": {
+        "functionCode": "const request = $input.item.json;\n\nif (!request.booking_id) {\n  throw new Error('booking_id is required');\n}\n\nreturn {\n  booking_id: request.booking_id,\n  trigger_invoice: request.trigger_invoice !== false,\n  send_email: request.send_email !== false,\n  timestamp: new Date().toISOString()\n};\n"
+      }
+    },
+    {
+      "id": "1759505380623_166",
+      "name": "Get Booking from Supabase",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        600.0,
+        200.0
+      ],
+      "parameters": {
+        "url": "https://your-project.supabase.co/rest/v1/bookings?id=eq.{{$json.booking_id}}&select=*,customer:customers(*),service:services(*)&limit=1",
+        "method": "GET",
+        "headers": {
+          "apikey": "your-supabase-anon-key",
+          "Authorization": "Bearer your-supabase-anon-key"
+        }
+      }
+    },
+    {
+      "id": "1759505380623_167",
+      "name": "Prepare Booking Data",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        850.0,
+        200.0
+      ],
+      "parameters": {
+        "functionCode": "const bookings = $input.item.json;\n\nif (!bookings || bookings.length === 0) {\n  throw new Error('Booking not found');\n}\n\nconst booking = bookings[0];\n\nreturn {\n  booking_id: booking.id,\n  booking_date: booking.booking_date,\n  booking_time: booking.booking_time,\n  status: booking.status,\n  duration_minutes: booking.duration_minutes,\n  notes: booking.notes,\n  confirmation_code: booking.confirmation_code,\n  customer_id: booking.customer.id,\n  customer_name: booking.customer.name,\n  customer_email: booking.customer.email,\n  customer_phone: booking.customer.phone,\n  customer_address: booking.customer.address || '',\n  service_id: booking.service.id,\n  service_name: booking.service.name,\n  service_price: booking.service.price,\n  hourly_rate: booking.service.hourly_rate || 100\n};\n"
+      }
+    },
+    {
+      "id": "1759505380623_168",
+      "name": "Booking Completed?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        1100.0,
+        200.0
+      ],
+      "parameters": {
+        "conditions": [
+          {
+            "leftValue": "={{$json.status}}",
+            "operation": "equals",
+            "rightValue": "completed"
+          }
+        ]
+      }
+    },
+    {
+      "id": "1759505380623_169",
+      "name": "Return Not Completed",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        100.0,
+        300.0
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseCode": 400,
+        "responseBody": {
+          "success": false,
+          "error": "Booking is not completed",
+          "status": "={{$json.status}}"
+        }
+      }
+    },
+    {
+      "id": "1759505380623_170",
+      "name": "Calculate Invoice",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        100.0,
+        400.0
+      ],
+      "parameters": {
+        "functionCode": "const booking = $input.item.json;\n\n// Calculate amounts\nconst duration_hours = booking.duration_minutes / 60;\nconst subtotal = duration_hours * booking.hourly_rate;\nconst tax_rate = 0.10; // 10% tax\nconst tax_amount = subtotal * tax_rate;\nconst total = subtotal + tax_amount;\n\n// Generate invoice number\nconst invoice_number = `INV-${new Date().getFullYear()}-${String(Date.now()).slice(-6)}`;\nconst invoice_date = new Date().toISOString().split('T')[0];\nconst due_date = new Date(Date.now() + 30*24*60*60*1000).toISOString().split('T')[0];\n\nreturn {\n  // Booking info\n  booking_id: booking.booking_id,\n  booking_date: booking.booking_date,\n  booking_time: booking.booking_time,\n  confirmation_code: booking.confirmation_code,\n\n  // Customer info\n  customer_id: booking.customer_id,\n  customer_name: booking.customer_name,\n  customer_email: booking.customer_email,\n  customer_address: booking.customer_address,\n\n  // Service info\n  service_name: booking.service_name,\n  duration_minutes: booking.duration_minutes,\n  hourly_rate: booking.hourly_rate,\n\n  // Invoice calculations\n  invoice_number: invoice_number,\n  invoice_date: invoice_date,\n  due_date: due_date,\n  subtotal: subtotal.toFixed(2),\n  tax_rate: (tax_rate * 100).toFixed(0),\n  tax_amount: tax_amount.toFixed(2),\n  total: total.toFixed(2),\n  currency: 'USD',\n  status: 'pending'\n};\n"
+      }
+    },
+    {
+      "id": "1759505380623_171",
+      "name": "Create Invoice in Supabase",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        350.0,
+        400.0
+      ],
+      "parameters": {
+        "url": "https://your-project.supabase.co/rest/v1/invoices",
+        "method": "POST",
+        "headers": {
+          "apikey": "your-supabase-anon-key",
+          "Authorization": "Bearer your-supabase-anon-key",
+          "Content-Type": "application/json",
+          "Prefer": "return=representation"
+        },
+        "body": {
+          "booking_id": "={{$json.booking_id}}",
+          "customer_id": "={{$json.customer_id}}",
+          "invoice_number": "={{$json.invoice_number}}",
+          "invoice_date": "={{$json.invoice_date}}",
+          "due_date": "={{$json.due_date}}",
+          "subtotal": "={{$json.subtotal}}",
+          "tax_rate": "={{$json.tax_rate}}",
+          "tax_amount": "={{$json.tax_amount}}",
+          "total": "={{$json.total}}",
+          "currency": "={{$json.currency}}",
+          "status": "pending",
+          "line_items": [
+            {
+              "description": "={{$json.service_name}}",
+              "quantity": "={{$json.duration_minutes}}",
+              "unit": "minutes",
+              "rate": "={{$json.hourly_rate}}",
+              "amount": "={{$json.subtotal}}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "1759505380623_172",
+      "name": "Prepare Invoice Data",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        600.0,
+        400.0
+      ],
+      "parameters": {
+        "functionCode": "const invoiceData = $input.first().json;\nconst invoiceRecord = $input.last().json[0];\n\nreturn {\n  ...invoiceData,\n  invoice_id: invoiceRecord.id,\n  invoice_url: `https://example.com/invoices/${invoiceRecord.invoice_number}`,\n  pdf_url: `https://example.com/invoices/${invoiceRecord.invoice_number}.pdf`\n};\n"
+      }
+    },
+    {
+      "id": "1759505380623_173",
+      "name": "Link Invoice to Booking",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        850.0,
+        400.0
+      ],
+      "parameters": {
+        "url": "https://your-project.supabase.co/rest/v1/bookings?id=eq.{{$json.booking_id}}",
+        "method": "PATCH",
+        "headers": {
+          "apikey": "your-supabase-anon-key",
+          "Authorization": "Bearer your-supabase-anon-key",
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "invoice_id": "={{$json.invoice_id}}",
+          "invoice_number": "={{$json.invoice_number}}",
+          "invoiced_at": "={{$json.invoice_date}}"
+        }
+      }
+    },
+    {
+      "id": "1759505380623_174",
+      "name": "Generate Invoice PDF",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        1100.0,
+        400.0
+      ],
+      "parameters": {
+        "functionCode": "const inv = $input.item.json;\n\nconst invoiceHTML = `\n<!DOCTYPE html>\n<html>\n<head>\n  <meta charset=\"UTF-8\">\n  <style>\n    * { margin: 0; padding: 0; box-sizing: border-box; }\n    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; padding: 40px; }\n    .header { text-align: center; margin-bottom: 40px; border-bottom: 3px solid #4F46E5; padding-bottom: 20px; }\n    .header h1 { color: #4F46E5; font-size: 32px; margin-bottom: 10px; }\n    .invoice-info { display: flex; justify-content: space-between; margin-bottom: 30px; }\n    .info-block h3 { color: #4F46E5; margin-bottom: 10px; }\n    .info-block p { margin: 5px 0; color: #374151; }\n    table { width: 100%; border-collapse: collapse; margin: 20px 0; }\n    th { background: #4F46E5; color: white; padding: 12px; text-align: left; }\n    td { padding: 12px; border-bottom: 1px solid #E5E7EB; }\n    .total-row { background: #F3F4F6; font-weight: bold; }\n    .grand-total { background: #4F46E5; color: white; font-size: 18px; }\n    .footer { margin-top: 40px; text-align: center; color: #6B7280; padding-top: 20px; border-top: 1px solid #E5E7EB; }\n  </style>\n</head>\n<body>\n  <div class=\"header\">\n    <h1>INVOICE</h1>\n    <p style=\"color: #6B7280;\">Your Company Name</p>\n  </div>\n\n  <div class=\"invoice-info\">\n    <div class=\"info-block\">\n      <h3>Invoice Details</h3>\n      <p><strong>Invoice #:</strong> ${inv.invoice_number}</p>\n      <p><strong>Date:</strong> ${inv.invoice_date}</p>\n      <p><strong>Due Date:</strong> ${inv.due_date}</p>\n      <p><strong>Booking:</strong> ${inv.confirmation_code}</p>\n    </div>\n    <div class=\"info-block\">\n      <h3>Bill To</h3>\n      <p><strong>${inv.customer_name}</strong></p>\n      <p>${inv.customer_email}</p>\n      <p>${inv.customer_address}</p>\n    </div>\n  </div>\n\n  <table>\n    <thead>\n      <tr>\n        <th>Service</th>\n        <th>Date & Time</th>\n        <th>Duration</th>\n        <th>Rate</th>\n        <th>Amount</th>\n      </tr>\n    </thead>\n    <tbody>\n      <tr>\n        <td>${inv.service_name}</td>\n        <td>${inv.booking_date} ${inv.booking_time}</td>\n        <td>${inv.duration_minutes} minutes</td>\n        <td>$${inv.hourly_rate}/hour</td>\n        <td>$${inv.subtotal}</td>\n      </tr>\n      <tr class=\"total-row\">\n        <td colspan=\"4\" style=\"text-align: right;\">Subtotal:</td>\n        <td>$${inv.subtotal}</td>\n      </tr>\n      <tr class=\"total-row\">\n        <td colspan=\"4\" style=\"text-align: right;\">Tax (${inv.tax_rate}%):</td>\n        <td>$${inv.tax_amount}</td>\n      </tr>\n      <tr class=\"grand-total\">\n        <td colspan=\"4\" style=\"text-align: right;\">TOTAL DUE:</td>\n        <td>$${inv.total} ${inv.currency}</td>\n      </tr>\n    </tbody>\n  </table>\n\n  <div class=\"footer\">\n    <p><strong>Thank you for your business!</strong></p>\n    <p>Payment is due within 30 days. Please reference invoice number on payment.</p>\n    <p>Questions? Contact us at billing@example.com</p>\n  </div>\n</body>\n</html>\n`;\n\nreturn {\n  ...inv,\n  invoice_html: invoiceHTML\n};\n"
+      }
+    },
+    {
+      "id": "1759505380623_175",
+      "name": "Email Invoice to Customer",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 1,
+      "position": [
+        1350.0,
+        400.0
+      ],
+      "parameters": {
+        "fromEmail": "billing@example.com",
+        "toEmail": "={{$json.customer_email}}",
+        "subject": "Invoice {{$json.invoice_number}} - Payment Due ${{$json.total}}",
+        "message": "Dear {{$json.customer_name}},\n\nThank you for your recent booking! Please find your invoice details below.\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n📄 INVOICE DETAILS\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\nInvoice Number: {{$json.invoice_number}}\nInvoice Date: {{$json.invoice_date}}\nDue Date: {{$json.due_date}}\nBooking Reference: {{$json.confirmation_code}}\n\nService: {{$json.service_name}}\nDate & Time: {{$json.booking_date}} at {{$json.booking_time}}\nDuration: {{$json.duration_minutes}} minutes\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n💰 PAYMENT BREAKDOWN\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\nSubtotal: ${{$json.subtotal}}\nTax ({{$json.tax_rate}}%): ${{$json.tax_amount}}\nTOTAL DUE: ${{$json.total}} {{$json.currency}}\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n📥 View/Download Invoice:\n{{$json.invoice_url}}\n\n💳 Payment Methods:\n• Credit Card\n• Bank Transfer\n• PayPal\n• Stripe\n\nPlease pay by {{$json.due_date}} to avoid late fees.\n\nQuestions? Reply to this email or contact our billing team.\n\nBest regards,\nBilling Department\n"
+      }
+    },
+    {
+      "id": "1759505380623_176",
+      "name": "Notify Accounting",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 1,
+      "position": [
+        1600.0,
+        400.0
+      ],
+      "parameters": {
+        "fromEmail": "billing@example.com",
+        "toEmail": "accounting@example.com",
+        "subject": "Invoice Generated: {{$json.invoice_number}} - {{$json.customer_name}}",
+        "message": "New invoice generated and sent to customer:\n\nInvoice #: {{$json.invoice_number}}\nCustomer: {{$json.customer_name}} ({{$json.customer_email}})\nBooking: {{$json.confirmation_code}}\nService: {{$json.service_name}}\nAmount: ${{$json.total}} {{$json.currency}}\nStatus: Pending\nDue Date: {{$json.due_date}}\n\nView: {{$json.invoice_url}}\n"
+      }
+    },
+    {
+      "id": "1759505380623_177",
+      "name": "Log Activity in Supabase",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        1850.0,
+        400.0
+      ],
+      "parameters": {
+        "url": "https://your-project.supabase.co/rest/v1/activity_logs",
+        "method": "POST",
+        "headers": {
+          "apikey": "your-supabase-anon-key",
+          "Authorization": "Bearer your-supabase-anon-key",
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "type": "invoice_generated",
+          "booking_id": "={{$json.booking_id}}",
+          "invoice_id": "={{$json.invoice_id}}",
+          "customer_id": "={{$json.customer_id}}",
+          "metadata": {
+            "invoice_number": "={{$json.invoice_number}}",
+            "amount": "={{$json.total}}",
+            "currency": "={{$json.currency}}"
+          }
+        }
+      }
+    },
+    {
+      "id": "1759505380623_178",
+      "name": "Notify Team",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 1,
+      "position": [
+        2100.0,
+        400.0
+      ],
+      "parameters": {
+        "channel": "#billing",
+        "text": "💰 Invoice {{$json.invoice_number}} generated for {{$json.customer_name}} - ${{$json.total}} {{$json.currency}} | Booking: {{$json.confirmation_code}}"
+      },
+      "credentials": {
+        "slackApi": {
+          "id": "credential_id",
+          "name": "Slack"
+        }
+      }
+    },
+    {
+      "id": "1759505380623_179",
+      "name": "Return Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        2350.0,
+        400.0
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseCode": 201,
+        "responseBody": {
+          "success": true,
+          "invoice_id": "={{$json.invoice_id}}",
+          "invoice_number": "={{$json.invoice_number}}",
+          "booking_id": "={{$json.booking_id}}",
+          "total": "={{$json.total}}",
+          "currency": "={{$json.currency}}",
+          "invoice_url": "={{$json.invoice_url}}",
+          "pdf_url": "={{$json.pdf_url}}",
+          "email_sent": true,
+          "message": "Invoice generated and sent successfully"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Booking Completed": {
+      "main": [
+        [
+          {
+            "node": "Validate Booking ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Booking ID": {
+      "main": [
+        [
+          {
+            "node": "Get Booking from Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Booking from Supabase": {
+      "main": [
+        [
+          {
+            "node": "Prepare Booking Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Booking Data": {
+      "main": [
+        [
+          {
+            "node": "Booking Completed?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Booking Completed?": {
+      "main": [
+        [
+          {
+            "node": "Calculate Invoice",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Return Not Completed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate Invoice": {
+      "main": [
+        [
+          {
+            "node": "Create Invoice in Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Invoice in Supabase": {
+      "main": [
+        [
+          {
+            "node": "Prepare Invoice Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Invoice Data": {
+      "main": [
+        [
+          {
+            "node": "Link Invoice to Booking",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Link Invoice to Booking": {
+      "main": [
+        [
+          {
+            "node": "Generate Invoice PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Invoice PDF": {
+      "main": [
+        [
+          {
+            "node": "Email Invoice to Customer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email Invoice to Customer": {
+      "main": [
+        [
+          {
+            "node": "Notify Accounting",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify Accounting": {
+      "main": [
+        [
+          {
+            "node": "Log Activity in Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Activity in Supabase": {
+      "main": [
+        [
+          {
+            "node": "Notify Team",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify Team": {
+      "main": [
+        [
+          {
+            "node": "Return Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionMode": "sequential",
+    "timezone": "UTC"
+  },
+  "tags": [
+    "supabase",
+    "booking",
+    "invoice",
+    "billing",
+    "automation"
+  ]
+}
