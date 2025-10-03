@@ -1,0 +1,237 @@
+{
+  "name": "Order Processing & Payment",
+  "active": false,
+  "version": 1.0,
+  "nodes": [
+    {
+      "id": "1759504228532_30",
+      "name": "Order Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        100.0,
+        200.0
+      ],
+      "parameters": {
+        "path": "orders/process",
+        "method": "POST",
+        "authentication": "none"
+      }
+    },
+    {
+      "id": "1759504228532_31",
+      "name": "Calculate Total",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        350.0,
+        200.0
+      ],
+      "parameters": {
+        "functionCode": "const { items, userId } = $input.item.json.body;\nconst total = items.reduce((sum, item) => sum + (item.price * item.quantity), 0);\n\nreturn [{\n  json: {\n    userId,\n    items,\n    total,\n    orderId: 'ORD-' + Date.now()\n  }\n}];\n"
+      }
+    },
+    {
+      "id": "1759504228532_32",
+      "name": "Process Payment",
+      "type": "n8n-nodes-base.stripe",
+      "typeVersion": 1,
+      "position": [
+        600.0,
+        200.0
+      ],
+      "parameters": {
+        "resource": "charge",
+        "operation": "create",
+        "amount": "={{$json.total}}",
+        "currency": "usd"
+      },
+      "credentials": {
+        "stripeApi": {
+          "id": "credential_id",
+          "name": "Stripe"
+        }
+      }
+    },
+    {
+      "id": "1759504228532_33",
+      "name": "Payment Success?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        850.0,
+        200.0
+      ],
+      "parameters": {
+        "conditions": [
+          {
+            "leftValue": "={{$json.status}}",
+            "operation": "equals",
+            "rightValue": "succeeded"
+          }
+        ]
+      }
+    },
+    {
+      "id": "1759504228532_34",
+      "name": "Save Order",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [
+        1100.0,
+        200.0
+      ],
+      "parameters": {
+        "operation": "insert",
+        "table": "orders"
+      },
+      "credentials": {
+        "postgres": {
+          "id": "credential_id",
+          "name": "PostgreSQL"
+        }
+      }
+    },
+    {
+      "id": "1759504228532_35",
+      "name": "Send Confirmation",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 1,
+      "position": [
+        1350.0,
+        200.0
+      ],
+      "parameters": {
+        "fromEmail": "orders@example.com",
+        "toEmail": "={{$json.customerEmail}}",
+        "subject": "Order Confirmation - {{$json.orderId}}",
+        "message": "Your order has been confirmed!"
+      }
+    },
+    {
+      "id": "1759504228532_36",
+      "name": "Send Error Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 1,
+      "position": [
+        100.0,
+        300.0
+      ],
+      "parameters": {
+        "fromEmail": "orders@example.com",
+        "toEmail": "orders@example.com",
+        "subject": "Payment Failed - {{$json.orderId}}",
+        "message": "Payment failed for order {{$json.orderId}}"
+      }
+    },
+    {
+      "id": "1759504228532_37",
+      "name": "Return Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        100.0,
+        400.0
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseCode": 200
+      }
+    }
+  ],
+  "connections": {
+    "Order Webhook": {
+      "main": [
+        [
+          {
+            "node": "Calculate Total",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate Total": {
+      "main": [
+        [
+          {
+            "node": "Process Payment",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Payment": {
+      "main": [
+        [
+          {
+            "node": "Payment Success?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Payment Success?": {
+      "main": [
+        [
+          {
+            "node": "Save Order",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Error Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Order": {
+      "main": [
+        [
+          {
+            "node": "Send Confirmation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Confirmation": {
+      "main": [
+        [
+          {
+            "node": "Return Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Error Email": {
+      "main": [
+        [
+          {
+            "node": "Return Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionMode": "sequential",
+    "timezone": "UTC"
+  },
+  "tags": [
+    "ecommerce",
+    "payment",
+    "orders"
+  ]
+}

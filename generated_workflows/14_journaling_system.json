@@ -1,0 +1,282 @@
+{
+  "name": "Digital Journaling System",
+  "active": true,
+  "version": 1.0,
+  "nodes": [
+    {
+      "id": "1759504228541_110",
+      "name": "Submit Entry",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        100.0,
+        200.0
+      ],
+      "parameters": {
+        "path": "journal/entry",
+        "method": "POST",
+        "authentication": "none"
+      }
+    },
+    {
+      "id": "1759504228541_111",
+      "name": "Process Entry",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        350.0,
+        200.0
+      ],
+      "parameters": {
+        "functionCode": "const entry = $input.item.json;\n\n// Calculate word count\nconst wordCount = (entry.content || '').split(/\\s+/).filter(w => w.length > 0).length;\n\n// Extract mood (simple keyword analysis)\nconst content = (entry.content || '').toLowerCase();\nlet detectedMood = 'neutral';\n\nif (content.includes('happy') || content.includes('great') || content.includes('wonderful')) {\n  detectedMood = 'positive';\n} else if (content.includes('sad') || content.includes('anxious') || content.includes('stressed')) {\n  detectedMood = 'negative';\n}\n\n// Override with explicit mood if provided\nconst mood = entry.mood || detectedMood;\n\nreturn {\n  userId: entry.userId,\n  title: entry.title || `Entry - ${new Date().toLocaleDateString()}`,\n  content: entry.content,\n  mood: mood,\n  tags: entry.tags || [],\n  wordCount: wordCount,\n  timestamp: new Date().toISOString(),\n  entryId: `JE${Date.now()}`,\n  isPrivate: entry.isPrivate !== false\n};\n"
+      }
+    },
+    {
+      "id": "1759504228541_112",
+      "name": "Save Entry",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [
+        600.0,
+        200.0
+      ],
+      "parameters": {
+        "operation": "insert",
+        "table": "journal_entries"
+      },
+      "credentials": {
+        "postgres": {
+          "id": "credential_id",
+          "name": "PostgreSQL"
+        }
+      }
+    },
+    {
+      "id": "1759504228541_113",
+      "name": "Get Recent Moods",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [
+        850.0,
+        200.0
+      ],
+      "parameters": {
+        "operation": "select",
+        "query": "SELECT mood, timestamp FROM journal_entries WHERE userId = '{{$json.userId}}' ORDER BY timestamp DESC LIMIT 7"
+      },
+      "credentials": {
+        "postgres": {
+          "id": "credential_id",
+          "name": "PostgreSQL"
+        }
+      }
+    },
+    {
+      "id": "1759504228541_114",
+      "name": "Analyze Mood Trends",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        1100.0,
+        200.0
+      ],
+      "parameters": {
+        "functionCode": "const recentMoods = $input.item.json || [];\n\n// Count moods\nconst moodCounts = {};\nrecentMoods.forEach(entry => {\n  moodCounts[entry.mood] = (moodCounts[entry.mood] || 0) + 1;\n});\n\n// Determine trend\nlet trend = 'stable';\nconst posCount = moodCounts['positive'] || 0;\nconst negCount = moodCounts['negative'] || 0;\n\nif (posCount > negCount + 2) {\n  trend = 'improving';\n} else if (negCount > posCount + 2) {\n  trend = 'concerning';\n}\n\nreturn {\n  entryId: recentMoods[0]?.entryId,\n  userId: recentMoods[0]?.userId,\n  moodTrend: trend,\n  positiveCount: posCount,\n  negativeCount: negCount,\n  totalEntries: recentMoods.length,\n  needsSupport: negCount >= 3\n};\n"
+      }
+    },
+    {
+      "id": "1759504228541_115",
+      "name": "Needs Support?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        1350.0,
+        200.0
+      ],
+      "parameters": {
+        "conditions": [
+          {
+            "leftValue": "={{$json.needsSupport}}",
+            "operation": "equals",
+            "rightValue": true
+          }
+        ]
+      }
+    },
+    {
+      "id": "1759504228541_116",
+      "name": "Send Support Resources",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 1,
+      "position": [
+        100.0,
+        300.0
+      ],
+      "parameters": {
+        "fromEmail": "wellness@example.com",
+        "toEmail": "user@example.com",
+        "subject": "We care about your wellbeing",
+        "message": "Hi,\n\nWe noticed you might be going through a challenging time.\n\nRemember, it's okay to not be okay. Here are some resources that might help:\n• Meditation exercises\n• Professional support contacts\n• Community forums\n\nTake care of yourself.\n"
+      }
+    },
+    {
+      "id": "1759504228541_117",
+      "name": "Generate Insights",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        100.0,
+        400.0
+      ],
+      "parameters": {
+        "functionCode": "const data = $input.item.json;\n\nconst insights = [\n  `You've written ${data.totalEntries} entries this week - great consistency!`,\n  `Your mood trend is ${data.moodTrend}.`,\n  `Keep reflecting on your thoughts and feelings.`\n];\n\nreturn {\n  userId: data.userId,\n  insights: insights,\n  streak: data.totalEntries,\n  encouragement: data.moodTrend === 'improving' ? 'Things are looking up!' : 'Every day is a new opportunity.'\n};\n"
+      }
+    },
+    {
+      "id": "1759504228541_118",
+      "name": "Save Analytics",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [
+        350.0,
+        400.0
+      ],
+      "parameters": {
+        "operation": "insert",
+        "table": "journal_analytics"
+      },
+      "credentials": {
+        "postgres": {
+          "id": "credential_id",
+          "name": "PostgreSQL"
+        }
+      }
+    },
+    {
+      "id": "1759504228541_119",
+      "name": "Return Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        600.0,
+        400.0
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseCode": 201,
+        "responseBody": {
+          "status": "success",
+          "message": "Entry saved successfully",
+          "insights": "={{$json.insights}}"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Submit Entry": {
+      "main": [
+        [
+          {
+            "node": "Process Entry",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Entry": {
+      "main": [
+        [
+          {
+            "node": "Save Entry",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Entry": {
+      "main": [
+        [
+          {
+            "node": "Get Recent Moods",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Recent Moods": {
+      "main": [
+        [
+          {
+            "node": "Analyze Mood Trends",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze Mood Trends": {
+      "main": [
+        [
+          {
+            "node": "Needs Support?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Needs Support?": {
+      "main": [
+        [
+          {
+            "node": "Send Support Resources",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Generate Insights",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Insights": {
+      "main": [
+        [
+          {
+            "node": "Save Analytics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Analytics": {
+      "main": [
+        [
+          {
+            "node": "Return Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionMode": "sequential",
+    "timezone": "UTC"
+  },
+  "tags": [
+    "journaling",
+    "wellness",
+    "reflection",
+    "mood-tracking"
+  ]
+}

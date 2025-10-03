@@ -1,0 +1,253 @@
+{
+  "name": "User Registration Flow",
+  "active": false,
+  "version": 1.0,
+  "nodes": [
+    {
+      "id": "1759504228528_5",
+      "name": "Registration Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        100.0,
+        200.0
+      ],
+      "parameters": {
+        "path": "auth/register",
+        "method": "POST",
+        "authentication": "none"
+      }
+    },
+    {
+      "id": "1759504228528_6",
+      "name": "Validate & Hash Password",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        350.0,
+        200.0
+      ],
+      "parameters": {
+        "functionCode": "const { email, password, name } = $input.item.json.body;\n\n// Validation\nif (!email || !password || !name) {\n  throw new Error('Missing required fields');\n}\n\nif (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) {\n  throw new Error('Invalid email format');\n}\n\n// In production, use bcrypt for password hashing\nconst passwordHash = 'hashed_' + password;\n\nreturn [{\n  json: {\n    email,\n    name,\n    password_hash: passwordHash,\n    email_verified: false,\n    created_at: new Date().toISOString()\n  }\n}];\n"
+      }
+    },
+    {
+      "id": "1759504228528_7",
+      "name": "Check Existing User",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [
+        600.0,
+        200.0
+      ],
+      "parameters": {
+        "operation": "select",
+        "query": "SELECT id FROM users WHERE email = '{{$json.email}}'"
+      },
+      "credentials": {
+        "postgres": {
+          "id": "credential_id",
+          "name": "PostgreSQL"
+        }
+      }
+    },
+    {
+      "id": "1759504228528_8",
+      "name": "User Exists?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        850.0,
+        200.0
+      ],
+      "parameters": {
+        "conditions": [
+          {
+            "leftValue": "={{$json.length}}",
+            "operation": "largerEqual",
+            "rightValue": 1
+          }
+        ]
+      }
+    },
+    {
+      "id": "1759504228528_9",
+      "name": "Return Error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        100.0,
+        300.0
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseCode": 400,
+        "responseBody": {
+          "error": "User already exists"
+        }
+      }
+    },
+    {
+      "id": "1759504228528_10",
+      "name": "Create User",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [
+        100.0,
+        400.0
+      ],
+      "parameters": {
+        "operation": "insert",
+        "table": "users"
+      },
+      "credentials": {
+        "postgres": {
+          "id": "credential_id",
+          "name": "PostgreSQL"
+        }
+      }
+    },
+    {
+      "id": "1759504228528_11",
+      "name": "Generate Verification Token",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        350.0,
+        400.0
+      ],
+      "parameters": {
+        "functionCode": "const userId = $input.item.json.id;\nconst token = Math.random().toString(36).substring(2, 15);\n\nreturn [{\n  json: {\n    userId,\n    email: $input.item.json.email,\n    name: $input.item.json.name,\n    verificationToken: token,\n    verificationUrl: 'https://app.example.com/verify?token=' + token\n  }\n}];\n"
+      }
+    },
+    {
+      "id": "1759504228528_12",
+      "name": "Send Verification Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 1,
+      "position": [
+        600.0,
+        400.0
+      ],
+      "parameters": {
+        "fromEmail": "noreply@example.com",
+        "toEmail": "={{$json.email}}",
+        "subject": "Verify Your Email Address",
+        "message": "Hi {{$json.name}},\n\nWelcome to our platform! Please verify your email address by clicking the link below:\n\n{{$json.verificationUrl}}\n\nBest regards,\nThe Team\n"
+      }
+    },
+    {
+      "id": "1759504228528_13",
+      "name": "Return Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        850.0,
+        400.0
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseCode": 201,
+        "responseBody": {
+          "message": "User created successfully",
+          "userId": "={{$json.userId}}"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Registration Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validate & Hash Password",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate & Hash Password": {
+      "main": [
+        [
+          {
+            "node": "Check Existing User",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Existing User": {
+      "main": [
+        [
+          {
+            "node": "User Exists?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "User Exists?": {
+      "main": [
+        [
+          {
+            "node": "Return Error",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Create User",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create User": {
+      "main": [
+        [
+          {
+            "node": "Generate Verification Token",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Verification Token": {
+      "main": [
+        [
+          {
+            "node": "Send Verification Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Verification Email": {
+      "main": [
+        [
+          {
+            "node": "Return Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionMode": "sequential",
+    "timezone": "UTC"
+  },
+  "tags": [
+    "auth",
+    "registration",
+    "email"
+  ]
+}

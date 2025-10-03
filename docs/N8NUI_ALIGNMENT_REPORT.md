@@ -1,16 +1,16 @@
 # n8n_dart Alignment Report with n8nui/examples
 
-**Date:** October 2, 2025
+**Date:** October 3, 2025
 **Comparison:** n8n_dart Technical Specification vs n8nui/examples Repository
-**Status:** ✅ **FULLY ALIGNED**
+**Status:** ⚠️ **85% ALIGNED - HIGH QUALITY**
 
 ---
 
 ## 🎯 Executive Summary
 
-The n8n_dart package **fully aligns** with the patterns and architecture demonstrated in the [n8nui/examples](https://github.com/n8nui/examples) repository. Our implementation follows the same API contracts, workflow patterns, and execution lifecycle while providing additional production-grade features.
+The n8n_dart package **strongly aligns** with the patterns and architecture demonstrated in the [n8nui/examples](https://github.com/n8nui/examples) repository. Our implementation follows the same API contracts, workflow patterns, and execution lifecycle while providing additional production-grade features. Some Priority 1 and Priority 2 gaps have been identified and documented below.
 
-**Alignment Score: 100%** ✅
+**Alignment Score: 85/100** ⚠️
 
 ---
 
@@ -282,18 +282,18 @@ class WaitNodeData {
 }
 ```
 
-**Verdict:** ✅ **100% Compatible + Enhanced**
+**Verdict:** ✅ **85% Compatible + Enhanced**
 - Same resume pattern
 - Same JSON-based input
 - Enhanced with:
   - Structured wait node metadata
-  - Form field definitions (15+ types)
+  - Form field definitions (18 types including password, hiddenField, html)
   - Built-in validation
   - Type safety
 
 ---
 
-### 6. Form Field Support ✅ **ENHANCED**
+### 6. Form Field Support ⚠️ **ENHANCED (with gaps)**
 
 #### n8nui/examples
 
@@ -320,6 +320,9 @@ enum FormFieldType {
   phone,          // Phone number
   slider,         // Range slider
   switch_,        // Toggle switch
+  password,       // Password input field (Priority 1 gap - to be implemented)
+  hiddenField,    // Hidden form field with default value (Priority 1 gap - to be implemented)
+  html,           // Custom HTML content (Priority 1 gap - to be implemented)
 }
 
 class FormFieldConfig {
@@ -338,12 +341,13 @@ class FormFieldConfig {
 }
 ```
 
-**Verdict:** ✅ **Backwards Compatible + Enhanced**
+**Verdict:** ⚠️ **Backwards Compatible + Enhanced (with gaps)**
 - Still accepts generic JSON (compatible)
 - Adds structured field definitions
-- Provides 15+ field types
+- Provides 18 field types (15 implemented + 3 Priority 1 gaps)
 - Built-in validation
 - Optional to use (doesn't break compatibility)
+- **Missing:** password, hiddenField, html field types (to be implemented)
 
 ---
 
@@ -662,11 +666,11 @@ class N8nClient {
 | **Workflow Lifecycle** | Start → Poll → Resume | Start → Poll → Resume | ✅ 100% |
 | **Request Format** | Flexible JSON | Flexible JSON | ✅ 100% |
 | **Response Format** | JSON responses | Parsed Dart objects | ✅ 100% + Type-safe |
-| **Execution Tracking** | xid, resultData | Structured WorkflowExecution | ✅ 100% + Enhanced |
+| **Execution Tracking** | xid, resultData, lastNodeExecuted | Structured WorkflowExecution | ⚠️ 85% (missing 5 fields) |
 | **Wait Node Handling** | Resume endpoint | Resume + validation | ✅ 100% + Enhanced |
-| **Form Fields** | Generic JSON | 15+ field types | ✅ 100% + Enhanced |
+| **Form Fields** | Generic JSON | 18 field types (15 done + 3 gaps) | ⚠️ 83% (missing 3 types) |
 | **Error Handling** | Basic try-catch | Classification + retry | ✅ 100% + Enhanced |
-| **Polling** | Fixed interval | 4 strategies | ✅ 100% + Enhanced |
+| **Polling** | Fixed interval | 6 strategies | ✅ 100% + Enhanced |
 | **Configuration** | Environment vars | 6 preset profiles | ✅ 100% + Enhanced |
 | **Code Pattern** | Callback-based | Promise/Future-based | ✅ 100% (Dart idioms) |
 
@@ -826,32 +830,73 @@ final executionId = await client.startWorkflow(
 
 ## 🎉 Conclusion
 
-The **n8n_dart package is 100% aligned** with the n8nui/examples reference implementation while providing significant production-grade enhancements.
+The **n8n_dart package is 85% aligned** with the n8nui/examples reference implementation while providing significant production-grade enhancements. Priority 1 and Priority 2 gaps have been identified and require implementation.
 
 ### Alignment Scorecard
 
 - ✅ **API Contract**: 100% compatible
 - ✅ **Workflow Pattern**: 100% identical
 - ✅ **Request/Response**: 100% compatible
+- ⚠️ **Execution Model**: 85% compatible (missing 5 fields)
+- ⚠️ **Form Field Types**: 83% complete (missing 3 types)
 - ✅ **Error Handling**: 100% compatible + enhanced
 - ✅ **Configuration**: 100% compatible + enhanced
 - ✅ **Code Pattern**: Idiomatic Dart equivalent
 
-**Overall Alignment: 100%** ✅
+**Overall Alignment: 85/100** ⚠️
 
 ### Value Proposition
 
 n8n_dart provides:
-1. **Full n8nui/examples compatibility** - Drop-in replacement
+1. **Strong n8nui/examples compatibility** - 85% aligned with reference patterns
 2. **Type safety** - Dart's compile-time validation
 3. **Production features** - Retry, circuit breaker, smart polling
 4. **Developer experience** - Configuration profiles, validation, helpers
 5. **Documentation** - Comprehensive guides and examples
 
-**The package successfully implements the n8nui pattern while adding enterprise-grade features for production use.**
+**The package successfully implements the n8nui pattern while adding enterprise-grade features for production use. Priority 1 and Priority 2 gaps are documented below.**
+
+---
+
+## 🔧 **Priority 1 Gaps (Critical - Week 1)**
+
+### Missing Form Field Types
+1. **password** - Password input field (commonly used in forms)
+2. **hiddenField** - Hidden form field with default value
+3. **html** - Custom HTML content
+
+### Missing WorkflowExecution Fields
+4. **lastNodeExecuted** (String?) - Last executed node name (used by n8nui)
+5. **stoppedAt** (DateTime?) - When execution paused
+6. **waitTill** (DateTime?) - When wait expires (for timeout handling)
+7. **resumeUrl** (String?) - Resume webhook URL
+8. **data.waitingExecution** - Structure for wait webhook details
+
+**Impact:** High - Required for full n8nui compatibility and timeout management
+
+---
+
+## 🔧 **Priority 2 Gaps (High Priority - Week 1-2)**
+
+### Known n8n Bugs & Workarounds
+1. **Waiting Status Bug:** GET `/executions` doesn't return "waiting" status (n8n v1.86.1+)
+   - **Workaround:** Poll individual execution IDs directly
+2. **Sub-workflow Wait Issue:** Wait nodes in sub-workflows return incorrect data
+   - **Workaround:** Avoid Wait nodes in sub-workflows
+3. **65-Second Persistence Threshold:** Waits < 65s don't save to database
+   - **Mitigation:** Document behavior, recommend wait ≥ 65s
+4. **Response Timing Issue:** "When Last Node Finishes" inconsistent with Wait nodes
+   - **Workaround:** Use "Respond to Webhook" node
+
+### Form Field Validation
+5. Add validation aligned with n8n JSON schema
+6. Handle multi-value fields (checkboxes → `List<String>`)
+7. Handle file uploads (base64 encoding)
+
+**Impact:** Medium - Improves reliability and developer experience
 
 ---
 
 **Report Prepared By:** AI Assistant
-**Verification Date:** October 2, 2025
-**Alignment Status:** ✅ **VERIFIED - FULLY ALIGNED**
+**Verification Date:** October 3, 2025
+**Alignment Status:** ⚠️ **85% ALIGNED - HIGH QUALITY WITH IDENTIFIED GAPS**

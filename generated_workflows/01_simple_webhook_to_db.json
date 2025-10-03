@@ -1,0 +1,117 @@
+{
+  "name": "Simple Webhook to Database",
+  "active": false,
+  "version": 1.0,
+  "nodes": [
+    {
+      "id": "1759504228516_1",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        100.0,
+        200.0
+      ],
+      "parameters": {
+        "path": "simple-webhook",
+        "method": "POST",
+        "authentication": "none"
+      }
+    },
+    {
+      "id": "1759504228516_2",
+      "name": "Transform Data",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        350.0,
+        200.0
+      ],
+      "parameters": {
+        "functionCode": "const { name, email, message } = $input.item.json.body;\n\nreturn [{\n  json: {\n    name,\n    email,\n    message,\n    created_at: new Date().toISOString()\n  }\n}];\n"
+      }
+    },
+    {
+      "id": "1759504228516_3",
+      "name": "Save to Database",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [
+        600.0,
+        200.0
+      ],
+      "parameters": {
+        "operation": "insert",
+        "table": "submissions"
+      },
+      "credentials": {
+        "postgres": {
+          "id": "credential_id",
+          "name": "PostgreSQL"
+        }
+      }
+    },
+    {
+      "id": "1759504228516_4",
+      "name": "Send Success Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        850.0,
+        200.0
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseCode": 200,
+        "responseBody": {
+          "status": "success",
+          "message": "Data saved successfully"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Transform Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Transform Data": {
+      "main": [
+        [
+          {
+            "node": "Save to Database",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save to Database": {
+      "main": [
+        [
+          {
+            "node": "Send Success Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionMode": "sequential",
+    "timezone": "UTC"
+  },
+  "tags": [
+    "example",
+    "webhook",
+    "database"
+  ]
+}

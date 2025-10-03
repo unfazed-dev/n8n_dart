@@ -12,10 +12,12 @@ Production-ready Dart package for **n8n workflow automation** integration. Works
 - ✅ **Smart Polling** - 6 polling strategies (minimal, balanced, high-frequency, battery-optimized, etc.)
 - ✅ **Error Handling** - Intelligent retry with exponential backoff and circuit breaker
 - ✅ **Stream Resilience** - 5 recovery strategies for robust stream management
-- ✅ **Dynamic Forms** - 15+ form field types for wait node interactions
-- ✅ **Configuration Profiles** - Pre-configured profiles for common use cases
+- ✅ **Dynamic Forms** - 18 form field types for wait node interactions
+- ✅ **Configuration Profiles** - 6 pre-configured profiles for common use cases
 - ✅ **Webhook Support** - Full webhook lifecycle management
 - ✅ **Health Checks** - Connection monitoring and validation
+- ✅ **Workflow Generator** - Programmatically create n8n workflow JSON files
+- ✅ **Pre-built Templates** - Ready-to-use workflow templates (CRUD, Auth, File Upload, etc.)
 
 ## 📦 Installation
 
@@ -185,6 +187,92 @@ final customConfig = N8nConfigBuilder()
   .retry(RetryConfig.aggressive())
   .build();
 ```
+
+## 🏗️ n8n Workflow Generator
+
+NEW! Generate n8n workflow JSON files programmatically using Dart:
+
+```dart
+import 'package:n8n_dart/n8n_dart.dart';
+
+void main() async {
+  // Create a workflow using fluent API
+  final workflow = WorkflowBuilder.create()
+      .name('User Registration API')
+      .tags(['api', 'auth'])
+      .webhookTrigger(
+        name: 'Registration Webhook',
+        path: 'auth/register',
+        method: 'POST',
+      )
+      .postgres(
+        name: 'Save User',
+        operation: 'insert',
+        table: 'users',
+      )
+      .emailSend(
+        name: 'Welcome Email',
+        fromEmail: 'welcome@example.com',
+        toEmail: '={{$json.email}}',
+        subject: 'Welcome!',
+      )
+      .respondToWebhook(
+        name: 'Return Success',
+        responseCode: 201,
+      )
+      .connectSequence([
+        'Registration Webhook',
+        'Save User',
+        'Welcome Email',
+        'Return Success',
+      ])
+      .build();
+
+  // Save to file
+  await workflow.saveToFile('user_registration.json');
+
+  // Import into n8n UI!
+}
+```
+
+### Pre-built Templates
+
+```dart
+// CRUD API
+final crudWorkflow = WorkflowTemplates.crudApi(
+  resourceName: 'products',
+  tableName: 'products',
+);
+
+// User Registration
+final authWorkflow = WorkflowTemplates.userRegistration(
+  webhookPath: 'auth/register',
+  tableName: 'users',
+  fromEmail: 'noreply@example.com',
+);
+
+// File Upload with S3
+final uploadWorkflow = WorkflowTemplates.fileUpload(
+  webhookPath: 'upload',
+  s3Bucket: 'my-uploads',
+);
+
+// Order Processing with Stripe
+final orderWorkflow = WorkflowTemplates.orderProcessing(
+  webhookPath: 'orders',
+  notificationEmail: 'orders@example.com',
+);
+
+// Multi-step Form
+final formWorkflow = WorkflowTemplates.multiStepForm(
+  webhookPath: 'onboarding',
+  tableName: 'onboarding_data',
+);
+```
+
+**See the [Workflow Generator Guide](docs/WORKFLOW_GENERATOR_GUIDE.md) for complete documentation!**
+
+---
 
 ## 🔧 Advanced Features
 

@@ -1,0 +1,313 @@
+{
+  "name": "Appointment Booking System",
+  "active": true,
+  "version": 1.0,
+  "nodes": [
+    {
+      "id": "1759504228540_99",
+      "name": "Booking Request",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        100.0,
+        200.0
+      ],
+      "parameters": {
+        "path": "appointments/book",
+        "method": "POST",
+        "authentication": "none"
+      }
+    },
+    {
+      "id": "1759504228540_100",
+      "name": "Validate Request",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        350.0,
+        200.0
+      ],
+      "parameters": {
+        "functionCode": "const booking = $input.item.json;\n\n// Validate required fields\nif (!booking.customerName || !booking.email || !booking.date || !booking.time) {\n  throw new Error('Missing required fields: customerName, email, date, time');\n}\n\n// Parse and validate date\nconst requestedDate = new Date(booking.date);\nconst now = new Date();\n\nif (requestedDate < now) {\n  throw new Error('Cannot book appointments in the past');\n}\n\nreturn {\n  customerName: booking.customerName,\n  email: booking.email,\n  phone: booking.phone || '',\n  service: booking.service || 'general',\n  date: booking.date,\n  time: booking.time,\n  duration: booking.duration || 60,\n  notes: booking.notes || '',\n  requestedAt: now.toISOString()\n};\n"
+      }
+    },
+    {
+      "id": "1759504228540_101",
+      "name": "Check Availability",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [
+        600.0,
+        200.0
+      ],
+      "parameters": {
+        "operation": "select",
+        "query": "SELECT COUNT(*) as count FROM appointments WHERE date = '{{$json.date}}' AND time = '{{$json.time}}' AND status != 'cancelled'"
+      },
+      "credentials": {
+        "postgres": {
+          "id": "credential_id",
+          "name": "PostgreSQL"
+        }
+      }
+    },
+    {
+      "id": "1759504228540_102",
+      "name": "Slot Available?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        850.0,
+        200.0
+      ],
+      "parameters": {
+        "conditions": [
+          {
+            "leftValue": "={{$json.count}}",
+            "operation": "equals",
+            "rightValue": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "1759504228540_103",
+      "name": "Return Unavailable",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        100.0,
+        300.0
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseCode": 409,
+        "responseBody": {
+          "status": "error",
+          "message": "Selected time slot is not available",
+          "suggestion": "Please choose a different time"
+        }
+      }
+    },
+    {
+      "id": "1759504228540_104",
+      "name": "Generate Booking ID",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        100.0,
+        400.0
+      ],
+      "parameters": {
+        "functionCode": "const data = $input.item.json;\nreturn {\n  ...data,\n  bookingId: `BK${Date.now()}`,\n  status: 'confirmed',\n  confirmationCode: Math.random().toString(36).substring(2, 8).toUpperCase()\n};\n"
+      }
+    },
+    {
+      "id": "1759504228540_105",
+      "name": "Save Booking",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [
+        350.0,
+        400.0
+      ],
+      "parameters": {
+        "operation": "insert",
+        "table": "appointments"
+      },
+      "credentials": {
+        "postgres": {
+          "id": "credential_id",
+          "name": "PostgreSQL"
+        }
+      }
+    },
+    {
+      "id": "1759504228540_106",
+      "name": "Send Confirmation Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 1,
+      "position": [
+        600.0,
+        400.0
+      ],
+      "parameters": {
+        "fromEmail": "bookings@example.com",
+        "toEmail": "={{$json.email}}",
+        "subject": "Appointment Confirmed - {{$json.bookingId}}",
+        "message": "Hi {{$json.customerName}},\n\nYour appointment has been confirmed!\n\nBooking Details:\n• Confirmation Code: {{$json.confirmationCode}}\n• Service: {{$json.service}}\n• Date: {{$json.date}}\n• Time: {{$json.time}}\n• Duration: {{$json.duration}} minutes\n\nTo cancel or reschedule, please use your confirmation code.\n\nSee you soon!\n"
+      }
+    },
+    {
+      "id": "1759504228540_107",
+      "name": "Prepare SMS",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        850.0,
+        400.0
+      ],
+      "parameters": {
+        "functionCode": "const data = $input.item.json;\n\nif (data.phone && data.phone.length > 0) {\n  return {\n    to: data.phone,\n    message: `Appointment confirmed for ${data.date} at ${data.time}. Code: ${data.confirmationCode}`\n  };\n}\n\nreturn null;\n"
+      }
+    },
+    {
+      "id": "1759504228540_108",
+      "name": "Notify Team",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 1,
+      "position": [
+        1100.0,
+        400.0
+      ],
+      "parameters": {
+        "channel": "#appointments",
+        "text": "📅 New booking: {{$json.customerName}} - {{$json.service}} on {{$json.date}} at {{$json.time}}"
+      },
+      "credentials": {
+        "slackApi": {
+          "id": "credential_id",
+          "name": "Slack"
+        }
+      }
+    },
+    {
+      "id": "1759504228540_109",
+      "name": "Return Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1350.0,
+        400.0
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseCode": 201,
+        "responseBody": {
+          "status": "success",
+          "bookingId": "={{$json.bookingId}}",
+          "confirmationCode": "={{$json.confirmationCode}}",
+          "message": "Appointment booked successfully"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Booking Request": {
+      "main": [
+        [
+          {
+            "node": "Validate Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Request": {
+      "main": [
+        [
+          {
+            "node": "Check Availability",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Availability": {
+      "main": [
+        [
+          {
+            "node": "Slot Available?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Slot Available?": {
+      "main": [
+        [
+          {
+            "node": "Generate Booking ID",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Return Unavailable",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Booking ID": {
+      "main": [
+        [
+          {
+            "node": "Save Booking",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Booking": {
+      "main": [
+        [
+          {
+            "node": "Send Confirmation Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Confirmation Email": {
+      "main": [
+        [
+          {
+            "node": "Prepare SMS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare SMS": {
+      "main": [
+        [
+          {
+            "node": "Notify Team",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify Team": {
+      "main": [
+        [
+          {
+            "node": "Return Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionMode": "sequential",
+    "timezone": "UTC"
+  },
+  "tags": [
+    "booking",
+    "appointments",
+    "scheduling",
+    "calendar"
+  ]
+}

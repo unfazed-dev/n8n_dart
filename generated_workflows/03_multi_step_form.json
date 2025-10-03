@@ -1,0 +1,240 @@
+{
+  "name": "Multi-Step Onboarding Form",
+  "active": false,
+  "version": 1.0,
+  "nodes": [
+    {
+      "id": "1759504228529_14",
+      "name": "Start Onboarding",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        100.0,
+        200.0
+      ],
+      "parameters": {
+        "path": "onboarding/start",
+        "method": "POST",
+        "authentication": "none"
+      }
+    },
+    {
+      "id": "1759504228529_15",
+      "name": "Initialize Session",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        350.0,
+        200.0
+      ],
+      "parameters": {
+        "functionCode": "const { userId } = $input.item.json.body;\n\nreturn [{\n  json: {\n    sessionId: 'SESSION-' + Date.now(),\n    userId,\n    step1: $input.item.json.body,\n    createdAt: new Date().toISOString()\n  }\n}];\n"
+      }
+    },
+    {
+      "id": "1759504228530_16",
+      "name": "Wait for Personal Info",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [
+        600.0,
+        200.0
+      ],
+      "parameters": {
+        "resume": "webhook"
+      }
+    },
+    {
+      "id": "1759504228530_17",
+      "name": "Process Personal Info",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        850.0,
+        200.0
+      ],
+      "parameters": {
+        "functionCode": "return [{\n  json: {\n    ...$input.item.json,\n    step2_personal: $input.item.json.body\n  }\n}];\n"
+      }
+    },
+    {
+      "id": "1759504228530_18",
+      "name": "Wait for Preferences",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [
+        1100.0,
+        200.0
+      ],
+      "parameters": {
+        "resume": "webhook"
+      }
+    },
+    {
+      "id": "1759504228530_19",
+      "name": "Process Preferences",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        1350.0,
+        200.0
+      ],
+      "parameters": {
+        "functionCode": "return [{\n  json: {\n    ...$input.item.json,\n    step3_preferences: $input.item.json.body,\n    completedAt: new Date().toISOString()\n  }\n}];\n"
+      }
+    },
+    {
+      "id": "1759504228530_20",
+      "name": "Save Onboarding Data",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [
+        1600.0,
+        200.0
+      ],
+      "parameters": {
+        "operation": "insert",
+        "table": "onboarding_sessions"
+      },
+      "credentials": {
+        "postgres": {
+          "id": "credential_id",
+          "name": "PostgreSQL"
+        }
+      }
+    },
+    {
+      "id": "1759504228530_21",
+      "name": "Send Welcome Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 1,
+      "position": [
+        1850.0,
+        200.0
+      ],
+      "parameters": {
+        "fromEmail": "welcome@example.com",
+        "toEmail": "={{$json.step2_personal.email}}",
+        "subject": "Welcome! Your account is ready",
+        "message": "Thanks for completing onboarding!"
+      }
+    },
+    {
+      "id": "1759504228530_22",
+      "name": "Return Completion",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        2100.0,
+        200.0
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseCode": 200,
+        "responseBody": {
+          "message": "Onboarding completed",
+          "sessionId": "={{$json.sessionId}}"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Start Onboarding": {
+      "main": [
+        [
+          {
+            "node": "Initialize Session",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Initialize Session": {
+      "main": [
+        [
+          {
+            "node": "Wait for Personal Info",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait for Personal Info": {
+      "main": [
+        [
+          {
+            "node": "Process Personal Info",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Personal Info": {
+      "main": [
+        [
+          {
+            "node": "Wait for Preferences",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait for Preferences": {
+      "main": [
+        [
+          {
+            "node": "Process Preferences",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Preferences": {
+      "main": [
+        [
+          {
+            "node": "Save Onboarding Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Onboarding Data": {
+      "main": [
+        [
+          {
+            "node": "Send Welcome Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Welcome Email": {
+      "main": [
+        [
+          {
+            "node": "Return Completion",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionMode": "sequential",
+    "timezone": "UTC"
+  },
+  "tags": [
+    "form",
+    "wait",
+    "multi-step"
+  ]
+}

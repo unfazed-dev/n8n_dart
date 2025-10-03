@@ -3,6 +3,8 @@
 **Version:** 1.0.0
 **Date:** October 2, 2025
 **Project Type:** Dart Package (Flutter-compatible)
+**Timeline:** 1 month (MVP: Week 1-2, Phase 2: Week 3-4)
+**Development Methodology:** Test-Driven Development (TDD)
 
 ---
 
@@ -40,10 +42,11 @@ Based on the n8nui/examples repository analysis:
 - ✅ Comprehensive error handling with 5 retry strategies
 - ✅ Type-safe models with validation
 - ✅ Configurable service profiles (development, production, resilient, etc.)
-- ✅ Dynamic form field support (15+ field types)
+- ✅ Dynamic form field support (18 field types including password, hiddenField, html)
 - ✅ Memory leak prevention with proper disposal
 - ✅ Flutter-agnostic core (can be used in pure Dart)
 - ✅ Optional Flutter integration layer
+- ✅ Complete execution tracking (lastNodeExecuted, waitTill, stoppedAt, resumeUrl)
 
 ---
 
@@ -305,7 +308,7 @@ WorkflowStatus (enum)
 ├── canceled
 └── crashed
 
-FormFieldType (enum)
+FormFieldType (enum) - 18 types
 ├── text
 ├── email
 ├── number
@@ -320,7 +323,10 @@ FormFieldType (enum)
 ├── url
 ├── phone
 ├── slider
-└── switch_
+├── switch_
+├── password       # NEW - Password input field
+├── hiddenField    # NEW - Hidden form field with default value
+└── html           # NEW - Custom HTML content
 
 FormFieldConfig
 ├── name: String
@@ -348,6 +354,10 @@ WorkflowExecution
 ├── status: WorkflowStatus
 ├── startedAt: DateTime
 ├── finishedAt: DateTime?
+├── stoppedAt: DateTime?           # NEW - When execution paused
+├── waitTill: DateTime?             # NEW - When wait expires (for timeout handling)
+├── lastNodeExecuted: String?       # NEW - Last executed node name (critical for n8nui compatibility)
+├── resumeUrl: String?              # NEW - Resume webhook URL
 ├── data: Map<String, dynamic>?
 ├── error: String?
 ├── waitingForInput: bool
@@ -355,9 +365,149 @@ WorkflowExecution
 ├── metadata: Map<String, dynamic>?
 ├── retryCount: int
 └── executionTime: Duration?
+
+Note: The `data` field may contain a nested `waitingExecution` structure with waiting webhook details when status is "waiting".
 ```
 
-### 3.2 Validation Strategy
+### 3.2 Complex Form Handling in Practice
+
+#### Multi-Value Fields (Checkboxes)
+
+When `FormFieldType.checkbox` is used with multiple options, the field returns `List<String>` instead of a single value:
+
+```dart
+// Example: Checkbox field with multiple selections
+final field = FormFieldConfig(
+  name: 'interests',
+  label: 'Select your interests',
+  type: FormFieldType.checkbox,
+  options: ['coding', 'design', 'marketing'],
+  required: true,
+);
+
+// User submits: ['coding', 'design']
+final result = field.validate(['coding', 'design']); // ValidationResult<List<String>>
+if (result.isValid) {
+  print('Selected: ${result.value}'); // ['coding', 'design']
+}
+```
+
+**Implementation Detail:** Single-value validation returns `ValidationResult<String>`, multi-value returns `ValidationResult<List<String>>`. The validation logic checks if all selected values are in the `options` list.
+
+#### File Upload Handling
+
+File uploads are encoded as base64 strings in the form data:
+
+```dart
+// Example: File upload field
+final fileField = FormFieldConfig(
+  name: 'document',
+  label: 'Upload document',
+  type: FormFieldType.file,
+  required: true,
+  metadata: {
+    'maxSize': 5242880, // 5MB in bytes
+    'acceptedTypes': ['application/pdf', 'image/jpeg', 'image/png'],
+  },
+);
+
+// Client encodes file to base64
+final base64File = base64Encode(fileBytes);
+final fileData = {
+  'filename': 'document.pdf',
+  'mimeType': 'application/pdf',
+  'data': base64File, // Base64-encoded file content
+};
+
+// Submit to n8n workflow
+await client.resumeWorkflow(executionId, {'document': fileData});
+```
+
+**Implementation Detail:** Files are transmitted as JSON-compatible base64 strings. Size limits and MIME type checks are performed using `metadata` field. n8n server decodes base64 and processes the file.
+
+#### Multi-Step Workflows with Forms
+
+Each wait node represents a step in a multi-step workflow:
+
+```dart
+// Example: Multi-step approval workflow
+// Step 1: Initial request form
+final execution1 = await client.startWorkflow('approval-webhook', {
+  'requestType': 'vacation',
+  'days': 5,
+});
+
+// Poll until waiting for input
+WorkflowExecution exec;
+do {
+  await Future.delayed(Duration(seconds: 2));
+  exec = await client.getExecutionStatus(execution1);
+} while (!exec.waitingForInput);
+
+// Step 2: Manager approval form
+final managerForm = exec.waitNodeData!; // Contains approval form fields
+print('Manager needs to approve: ${managerForm.fields}');
+
+// Manager submits approval
+await client.resumeWorkflow(exec.id, {
+  'approved': 'true',
+  'managerComment': 'Approved for June',
+});
+
+// Step 3: HR confirmation form (workflow progresses to next wait node)
+do {
+  await Future.delayed(Duration(seconds: 2));
+  exec = await client.getExecutionStatus(exec.id);
+} while (!exec.waitingForInput && !exec.isFinished);
+
+if (exec.waitingForInput) {
+  final hrForm = exec.waitNodeData!; // Next form in the workflow
+  // HR submits final confirmation...
+}
+```
+
+**Implementation Detail:** Each `WaitNodeData` represents a form step. The workflow pauses at each wait node, collects user input via `resumeWorkflow()`, then progresses to the next wait node or completes. The `lastNodeExecuted` field tracks which node is currently waiting.
+
+#### Conditional Field Validation
+
+Field validation can check dependencies using the `metadata` field:
+
+```dart
+// Example: Conditional validation based on another field
+final countryField = FormFieldConfig(
+  name: 'country',
+  label: 'Country',
+  type: FormFieldType.select,
+  options: ['US', 'UK', 'CA'],
+  required: true,
+);
+
+final stateField = FormFieldConfig(
+  name: 'state',
+  label: 'State',
+  type: FormFieldType.select,
+  options: ['CA', 'NY', 'TX'],
+  required: false,
+  metadata: {
+    'dependsOn': 'country',
+    'showWhen': 'US', // Only required when country is US
+  },
+);
+
+// Validation logic checks metadata for conditional requirements
+bool isRequired(FormFieldConfig field, Map<String, dynamic> allValues) {
+  if (field.metadata?['dependsOn'] != null) {
+    final dependsOn = field.metadata!['dependsOn'] as String;
+    final showWhen = field.metadata!['showWhen'];
+    return allValues[dependsOn] == showWhen && field.required;
+  }
+  return field.required;
+}
+```
+
+**Implementation Detail:** The `metadata` field provides extensibility for conditional logic. Client applications check `dependsOn` and `showWhen` to determine field visibility and requirements. Validation respects these conditions.
+
+### 3.3 Validation Strategy
 
 All models implement safe parsing with `fromJsonSafe()`:
 
@@ -1328,7 +1478,64 @@ Follow Semantic Versioning 2.0.0:
 
 ---
 
-## 20. License & Acknowledgments
+## 20. Development Methodology
+
+### Test-Driven Development (TDD) Approach
+
+This project follows strict TDD methodology to ensure code quality, reliability, and maintainability.
+
+#### Red-Green-Refactor Cycle
+1. **Red:** Write failing tests first that define expected behavior
+2. **Green:** Write minimal code to make tests pass
+3. **Refactor:** Improve code quality while keeping tests green
+
+#### Test Coverage Requirements
+- **Minimum:** 80% overall code coverage (enforced in CI/CD)
+- **Target:** 90%+ coverage for core services (N8nClient, SmartPollingManager, N8nErrorHandler)
+- **Critical Paths:** 100% coverage for error handling, validation, and security logic
+
+#### Testing Pyramid
+- **Unit Tests (70%):** Fast, isolated tests for individual classes and methods
+- **Integration Tests (20%):** Test component interactions (client + polling + error handling)
+- **End-to-End Tests (10%):** Full workflow scenarios with mock n8n server
+
+#### Test Organization
+```
+/test
+├── unit/
+│   ├── models/          # Model validation, serialization tests
+│   ├── services/        # Service logic tests (mocked dependencies)
+│   └── configuration/   # Config builder and profile tests
+├── integration/
+│   ├── client_integration_test.dart
+│   └── polling_integration_test.dart
+└── e2e/
+    └── workflow_lifecycle_test.dart
+```
+
+#### Testing Tools & Practices
+- **Framework:** `test` package (official Dart testing framework)
+- **Mocking:** `mockito` with code generation for clean, type-safe mocks
+- **Coverage:** `coverage` package with lcov reports
+- **CI/CD:** GitHub Actions running tests on every PR
+- **Pre-commit Hooks:** Run tests and linting before commits
+
+#### Quality Gates
+- No PR merged without passing tests
+- No coverage decrease allowed (ratcheting)
+- All public APIs must have comprehensive test coverage
+- Edge cases and error paths explicitly tested
+
+#### Benefits of TDD for n8n_dart
+- **Reliability:** Catch bugs before users encounter them
+- **Refactoring Confidence:** Change code safely with test safety net
+- **Documentation:** Tests serve as executable specifications
+- **Design Quality:** TDD encourages modular, testable architecture
+- **Community Trust:** High test coverage signals production-readiness
+
+---
+
+## 21. License & Acknowledgments
 
 **License**: MIT
 
@@ -1365,6 +1572,70 @@ The n8n Flutter facade workflow (from sidegig) provides these endpoints:
 - Workflow cancellation
 
 This specification aligns with that facade design.
+
+---
+
+## Appendix D: Known n8n API Issues & Workarounds
+
+Based on Gap Analysis Report validation against n8n official API and n8nui/examples:
+
+### Issue 1: Waiting Status Bug (n8n v1.86.1+)
+**Problem:** GET `/executions` endpoint doesn't return executions with status "waiting"
+
+**Impact:** Cannot list all waiting executions via standard API
+
+**Workaround:**
+- Poll individual execution IDs directly via GET `/execution/{id}`
+- Track execution IDs client-side when workflows start
+- Monitor for status transition to "waiting" through polling
+
+### Issue 2: Sub-workflow Wait Node Data
+**Problem:** Wait nodes in sub-workflows return incorrect data (returns data from node before Wait instead of last node)
+
+**Impact:** Affects workflows that use Execute Workflow node with Wait nodes
+
+**Workaround:**
+- Avoid using Wait nodes in sub-workflows when possible
+- Use parent workflow Wait nodes instead
+- Document limitation for users
+
+### Issue 3: 65-Second Persistence Threshold
+**Problem:** Wait times < 65 seconds don't save execution data to database (data stays in memory)
+
+**Impact:** Server restart loses execution state for short waits
+
+**Mitigation:**
+- Document behavior for users
+- Recommend wait times ≥ 65s for production reliability
+- n8n server-side behavior; no client-side fix needed
+
+### Issue 4: "When Last Node Finishes" Response Timing
+**Problem:** May not return expected output with Wait nodes in some configurations
+
+**Impact:** Webhook responses may be inconsistent
+
+**Workaround:**
+- Use "Respond to Webhook" node for explicit control
+- Test response timing in development
+- Document recommended response mode for Wait node scenarios
+
+### Priority 1 Implementation Gaps (To Be Addressed)
+
+Per Gap Analysis Report Priority 1 (confirmed by n8nui validation):
+
+1. Add missing FormFieldType values: `password`, `hiddenField`, `html`
+2. Add `data.waitingExecution` structure for wait webhook details
+3. Add `lastNodeExecuted` to WorkflowExecution model (n8nui uses this)
+4. Document known n8n bugs and workarounds (✅ Completed - see Issues 1-4 above)
+
+### Priority 2 Implementation Gaps (High Priority)
+
+Per Gap Analysis Report Priority 2:
+
+5. Add `waitTill` and `stoppedAt` fields for timeout handling
+6. Add `resumeUrl` extraction from execution response
+7. Handle "waiting" status bug workaround (✅ Documented - see Issue 1 above)
+8. Add form field validation aligned with n8n JSON schema
 
 ---
 

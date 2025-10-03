@@ -84,3 +84,8 @@ export 'src/core/services/stream_recovery.dart';
 
 // Exceptions
 export 'src/core/exceptions/error_handling.dart';
+
+// Workflow Generator
+export 'src/workflow_generator/models/workflow_models.dart';
+export 'src/workflow_generator/workflow_builder.dart';
+export 'src/workflow_generator/templates/workflow_templates.dart';

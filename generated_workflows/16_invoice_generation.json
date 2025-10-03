@@ -1,0 +1,439 @@
+{
+  "name": "Automated Invoice Generation System",
+  "active": true,
+  "version": 1.0,
+  "nodes": [
+    {
+      "id": "1759504228544_134",
+      "name": "Invoice Request",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        100.0,
+        200.0
+      ],
+      "parameters": {
+        "path": "invoices/generate",
+        "method": "POST",
+        "authentication": "none"
+      }
+    },
+    {
+      "id": "1759504228544_135",
+      "name": "Validate Request",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        350.0,
+        200.0
+      ],
+      "parameters": {
+        "functionCode": "const request = $input.item.json;\n\nif (!request.bookingId) {\n  throw new Error('Booking ID is required');\n}\n\nreturn {\n  bookingId: request.bookingId,\n  sendEmail: request.sendEmail !== false,\n  includeTax: request.includeTax !== false,\n  requestedBy: request.requestedBy || 'system',\n  requestedAt: new Date().toISOString()\n};\n"
+      }
+    },
+    {
+      "id": "1759504228544_136",
+      "name": "Get Booking Details",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [
+        600.0,
+        200.0
+      ],
+      "parameters": {
+        "operation": "select",
+        "query": "SELECT * FROM appointments WHERE bookingId = '{{$json.bookingId}}' LIMIT 1"
+      },
+      "credentials": {
+        "postgres": {
+          "id": "credential_id",
+          "name": "PostgreSQL"
+        }
+      }
+    },
+    {
+      "id": "1759504228544_137",
+      "name": "Get Customer Info",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [
+        850.0,
+        200.0
+      ],
+      "parameters": {
+        "operation": "select",
+        "query": "SELECT * FROM customers WHERE id = '{{$json.customerId}}' LIMIT 1"
+      },
+      "credentials": {
+        "postgres": {
+          "id": "credential_id",
+          "name": "PostgreSQL"
+        }
+      }
+    },
+    {
+      "id": "1759504228544_138",
+      "name": "Calculate Invoice",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        1100.0,
+        200.0
+      ],
+      "parameters": {
+        "functionCode": "const booking = $input.item.json;\n\n// Get service pricing\nconst basePrice = booking.servicePrice || 100.00;\nconst duration = booking.duration || 60;\nconst hourlyRate = booking.hourlyRate || 100.00;\n\n// Calculate amounts\nconst subtotal = (duration / 60) * hourlyRate;\nconst taxRate = 0.10; // 10% tax\nconst taxAmount = subtotal * taxRate;\nconst total = subtotal + taxAmount;\n\n// Generate invoice number\nconst invoiceNumber = `INV-${new Date().getFullYear()}-${String(Date.now()).slice(-6)}`;\n\nreturn {\n  invoiceNumber: invoiceNumber,\n  invoiceDate: new Date().toISOString().split('T')[0],\n  dueDate: new Date(Date.now() + 30*24*60*60*1000).toISOString().split('T')[0], // 30 days\n  bookingId: booking.bookingId,\n  customerId: booking.customerId,\n  customerName: booking.customerName,\n  customerEmail: booking.customerEmail,\n  customerAddress: booking.customerAddress || '',\n  serviceDate: booking.date,\n  serviceTime: booking.time,\n  serviceName: booking.service,\n  duration: duration,\n  hourlyRate: hourlyRate,\n  subtotal: subtotal.toFixed(2),\n  taxRate: (taxRate * 100).toFixed(0),\n  taxAmount: taxAmount.toFixed(2),\n  total: total.toFixed(2),\n  status: 'pending',\n  currency: 'USD'\n};\n"
+      }
+    },
+    {
+      "id": "1759504228544_139",
+      "name": "Save Invoice",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [
+        1350.0,
+        200.0
+      ],
+      "parameters": {
+        "operation": "insert",
+        "table": "invoices"
+      },
+      "credentials": {
+        "postgres": {
+          "id": "credential_id",
+          "name": "PostgreSQL"
+        }
+      }
+    },
+    {
+      "id": "1759504228544_140",
+      "name": "Generate PDF",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        1600.0,
+        200.0
+      ],
+      "parameters": {
+        "functionCode": "const invoice = $input.item.json;\n\n// In real implementation, use PDF generation service\n// For now, create HTML template\nconst htmlInvoice = `\n<!DOCTYPE html>\n<html>\n<head>\n  <style>\n    body { font-family: Arial, sans-serif; margin: 40px; }\n    .header { text-align: center; margin-bottom: 30px; }\n    .invoice-details { margin-bottom: 20px; }\n    .customer-info { margin-bottom: 20px; }\n    table { width: 100%; border-collapse: collapse; margin-top: 20px; }\n    th, td { padding: 10px; text-align: left; border-bottom: 1px solid #ddd; }\n    .total { font-weight: bold; font-size: 1.2em; }\n    .footer { margin-top: 40px; text-align: center; color: #666; }\n  </style>\n</head>\n<body>\n  <div class=\"header\">\n    <h1>INVOICE</h1>\n    <p>Your Company Name</p>\n  </div>\n\n  <div class=\"invoice-details\">\n    <p><strong>Invoice #:</strong> ${invoice.invoiceNumber}</p>\n    <p><strong>Date:</strong> ${invoice.invoiceDate}</p>\n    <p><strong>Due Date:</strong> ${invoice.dueDate}</p>\n  </div>\n\n  <div class=\"customer-info\">\n    <h3>Bill To:</h3>\n    <p>${invoice.customerName}</p>\n    <p>${invoice.customerEmail}</p>\n    <p>${invoice.customerAddress}</p>\n  </div>\n\n  <table>\n    <thead>\n      <tr>\n        <th>Service</th>\n        <th>Date</th>\n        <th>Duration</th>\n        <th>Rate</th>\n        <th>Amount</th>\n      </tr>\n    </thead>\n    <tbody>\n      <tr>\n        <td>${invoice.serviceName}</td>\n        <td>${invoice.serviceDate} ${invoice.serviceTime}</td>\n        <td>${invoice.duration} min</td>\n        <td>$${invoice.hourlyRate}/hr</td>\n        <td>$${invoice.subtotal}</td>\n      </tr>\n      <tr>\n        <td colspan=\"4\" style=\"text-align: right;\">Subtotal:</td>\n        <td>$${invoice.subtotal}</td>\n      </tr>\n      <tr>\n        <td colspan=\"4\" style=\"text-align: right;\">Tax (${invoice.taxRate}%):</td>\n        <td>$${invoice.taxAmount}</td>\n      </tr>\n      <tr class=\"total\">\n        <td colspan=\"4\" style=\"text-align: right;\">TOTAL:</td>\n        <td>$${invoice.total} ${invoice.currency}</td>\n      </tr>\n    </tbody>\n  </table>\n\n  <div class=\"footer\">\n    <p>Thank you for your business!</p>\n    <p>Payment is due within 30 days. Please reference invoice number on payment.</p>\n  </div>\n</body>\n</html>\n`;\n\nreturn {\n  ...invoice,\n  pdfHtml: htmlInvoice,\n  pdfUrl: `https://example.com/invoices/${invoice.invoiceNumber}.pdf`\n};\n"
+      }
+    },
+    {
+      "id": "1759504228544_141",
+      "name": "Upload to Cloud Storage",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        1850.0,
+        200.0
+      ],
+      "parameters": {
+        "url": "https://api.cloudinary.com/v1_1/upload",
+        "method": "POST",
+        "body": {
+          "file": "={{$json.pdfHtml}}",
+          "folder": "invoices"
+        }
+      }
+    },
+    {
+      "id": "1759504228544_142",
+      "name": "Email Invoice",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 1,
+      "position": [
+        2100.0,
+        200.0
+      ],
+      "parameters": {
+        "fromEmail": "billing@example.com",
+        "toEmail": "={{$json.customerEmail}}",
+        "subject": "Invoice {{$json.invoiceNumber}} - Payment Due",
+        "message": "Dear {{$json.customerName}},\n\nThank you for choosing our services!\n\nPlease find your invoice attached for the service provided on {{$json.serviceDate}}.\n\nInvoice Details:\n• Invoice Number: {{$json.invoiceNumber}}\n• Amount Due: ${{$json.total}} {{$json.currency}}\n• Due Date: {{$json.dueDate}}\n\nService Summary:\n• Service: {{$json.serviceName}}\n• Date: {{$json.serviceDate}} at {{$json.serviceTime}}\n• Duration: {{$json.duration}} minutes\n\nYou can view and pay your invoice online at:\n{{$json.pdfUrl}}\n\nPayment Methods:\n• Credit Card\n• Bank Transfer\n• PayPal\n\nIf you have any questions, please don't hesitate to contact us.\n\nBest regards,\nBilling Department\n"
+      }
+    },
+    {
+      "id": "1759504228544_143",
+      "name": "Notify Accounting",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 1,
+      "position": [
+        2350.0,
+        200.0
+      ],
+      "parameters": {
+        "fromEmail": "billing@example.com",
+        "toEmail": "accounting@example.com",
+        "subject": "New Invoice Generated: {{$json.invoiceNumber}}",
+        "message": "Invoice generated successfully:\n\n• Invoice #: {{$json.invoiceNumber}}\n• Customer: {{$json.customerName}}\n• Amount: ${{$json.total}} {{$json.currency}}\n• Status: Pending\n• Booking: {{$json.bookingId}}\n\nView invoice: {{$json.pdfUrl}}\n"
+      }
+    },
+    {
+      "id": "1759504228544_144",
+      "name": "Notify Team",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 1,
+      "position": [
+        2600.0,
+        200.0
+      ],
+      "parameters": {
+        "channel": "#billing",
+        "text": "💰 Invoice {{$json.invoiceNumber}} generated for {{$json.customerName}} - ${{$json.total}} {{$json.currency}}"
+      },
+      "credentials": {
+        "slackApi": {
+          "id": "credential_id",
+          "name": "Slack"
+        }
+      }
+    },
+    {
+      "id": "1759504228544_145",
+      "name": "Schedule Reminder",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        2850.0,
+        200.0
+      ],
+      "parameters": {
+        "functionCode": "const invoice = $input.item.json;\nconst dueDate = new Date(invoice.dueDate);\nconst reminderDate = new Date(dueDate.getTime() - 7*24*60*60*1000);\n\nreturn {\n  invoiceNumber: invoice.invoiceNumber,\n  customerId: invoice.customerId,\n  customerEmail: invoice.customerEmail,\n  reminderDate: reminderDate.toISOString(),\n  reminderType: 'payment_due_soon',\n  amount: invoice.total\n};\n"
+      }
+    },
+    {
+      "id": "1759504228544_146",
+      "name": "Queue Reminder",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [
+        3100.0,
+        200.0
+      ],
+      "parameters": {
+        "operation": "insert",
+        "table": "scheduled_reminders"
+      },
+      "credentials": {
+        "postgres": {
+          "id": "credential_id",
+          "name": "PostgreSQL"
+        }
+      }
+    },
+    {
+      "id": "1759504228544_147",
+      "name": "Update Booking Status",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [
+        3350.0,
+        200.0
+      ],
+      "parameters": {
+        "operation": "update",
+        "table": "appointments",
+        "where": "bookingId = '{{$json.bookingId}}'",
+        "set": {
+          "invoiceGenerated": true,
+          "invoiceNumber": "={{$json.invoiceNumber}}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "credential_id",
+          "name": "PostgreSQL"
+        }
+      }
+    },
+    {
+      "id": "1759504228544_148",
+      "name": "Return Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        3600.0,
+        200.0
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseCode": 201,
+        "responseBody": {
+          "status": "success",
+          "invoiceNumber": "={{$json.invoiceNumber}}",
+          "amount": "={{$json.total}}",
+          "currency": "={{$json.currency}}",
+          "pdfUrl": "={{$json.pdfUrl}}",
+          "emailSent": true,
+          "message": "Invoice generated and sent successfully"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Invoice Request": {
+      "main": [
+        [
+          {
+            "node": "Validate Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Request": {
+      "main": [
+        [
+          {
+            "node": "Get Booking Details",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Booking Details": {
+      "main": [
+        [
+          {
+            "node": "Get Customer Info",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Customer Info": {
+      "main": [
+        [
+          {
+            "node": "Calculate Invoice",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate Invoice": {
+      "main": [
+        [
+          {
+            "node": "Save Invoice",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Invoice": {
+      "main": [
+        [
+          {
+            "node": "Generate PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate PDF": {
+      "main": [
+        [
+          {
+            "node": "Upload to Cloud Storage",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload to Cloud Storage": {
+      "main": [
+        [
+          {
+            "node": "Email Invoice",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email Invoice": {
+      "main": [
+        [
+          {
+            "node": "Notify Accounting",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify Accounting": {
+      "main": [
+        [
+          {
+            "node": "Notify Team",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify Team": {
+      "main": [
+        [
+          {
+            "node": "Schedule Reminder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Reminder": {
+      "main": [
+        [
+          {
+            "node": "Queue Reminder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Queue Reminder": {
+      "main": [
+        [
+          {
+            "node": "Update Booking Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Booking Status": {
+      "main": [
+        [
+          {
+            "node": "Return Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionMode": "sequential",
+    "timezone": "UTC"
+  },
+  "tags": [
+    "invoicing",
+    "billing",
+    "bookings",
+    "payments",
+    "accounting"
+  ]
+}

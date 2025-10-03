@@ -1,0 +1,257 @@
+{
+  "name": "Real-time Multi-Source Alert System",
+  "active": true,
+  "version": 1.0,
+  "nodes": [
+    {
+      "id": "1759504228538_80",
+      "name": "Alert Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        100.0,
+        200.0
+      ],
+      "parameters": {
+        "path": "alerts/trigger",
+        "method": "POST",
+        "authentication": "none"
+      }
+    },
+    {
+      "id": "1759504228538_81",
+      "name": "Classify Alert",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        350.0,
+        200.0
+      ],
+      "parameters": {
+        "functionCode": "const alert = $input.item.json;\n\n// Determine priority based on source and severity\nlet priority = 'low';\nlet requiresImmediate = false;\n\nif (alert.severity === 'critical' || alert.source === 'production') {\n  priority = 'high';\n  requiresImmediate = true;\n} else if (alert.severity === 'warning') {\n  priority = 'medium';\n}\n\nreturn {\n  ...alert,\n  priority: priority,\n  requiresImmediate: requiresImmediate,\n  timestamp: new Date().toISOString(),\n  alertId: `alert_${Date.now()}`\n};\n"
+      }
+    },
+    {
+      "id": "1759504228538_82",
+      "name": "Log Alert",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [
+        600.0,
+        200.0
+      ],
+      "parameters": {
+        "operation": "insert",
+        "table": "system_alerts"
+      },
+      "credentials": {
+        "postgres": {
+          "id": "credential_id",
+          "name": "PostgreSQL"
+        }
+      }
+    },
+    {
+      "id": "1759504228538_83",
+      "name": "High Priority?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        850.0,
+        200.0
+      ],
+      "parameters": {
+        "conditions": [
+          {
+            "leftValue": "={{$json.requiresImmediate}}",
+            "operation": "equals",
+            "rightValue": true
+          }
+        ]
+      }
+    },
+    {
+      "id": "1759504228538_84",
+      "name": "Alert Channel",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 1,
+      "position": [
+        100.0,
+        300.0
+      ],
+      "parameters": {
+        "channel": "#critical-alerts",
+        "text": "🚨 CRITICAL: {{$json.message}} (Source: {{$json.source}})"
+      },
+      "credentials": {
+        "slackApi": {
+          "id": "credential_id",
+          "name": "Slack"
+        }
+      }
+    },
+    {
+      "id": "1759504228538_85",
+      "name": "Trigger PagerDuty",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        350.0,
+        300.0
+      ],
+      "parameters": {
+        "url": "https://api.pagerduty.com/incidents",
+        "method": "POST",
+        "body": {
+          "incident": {
+            "type": "incident",
+            "title": "={{$json.message}}",
+            "urgency": "high"
+          }
+        }
+      }
+    },
+    {
+      "id": "1759504228538_86",
+      "name": "Email On-Call",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 1,
+      "position": [
+        600.0,
+        300.0
+      ],
+      "parameters": {
+        "fromEmail": "alerts@example.com",
+        "toEmail": "oncall@example.com",
+        "subject": "CRITICAL ALERT: {{$json.alertId}}",
+        "message": "Critical alert triggered:\n\nSource: {{$json.source}}\nMessage: {{$json.message}}\nTime: {{$json.timestamp}}\nPriority: {{$json.priority}}\n\nPlease investigate immediately.\n"
+      }
+    },
+    {
+      "id": "1759504228538_87",
+      "name": "Queue for Review",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        100.0,
+        400.0
+      ],
+      "parameters": {
+        "functionCode": "return {\n  status: 'queued',\n  message: 'Alert queued for review',\n  alertId: $input.item.json.alertId\n};\n"
+      }
+    },
+    {
+      "id": "1759504228538_88",
+      "name": "Acknowledge Alert",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        350.0,
+        400.0
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseCode": 200,
+        "responseBody": {
+          "status": "received",
+          "alertId": "={{$json.alertId}}"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Alert Webhook": {
+      "main": [
+        [
+          {
+            "node": "Classify Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Classify Alert": {
+      "main": [
+        [
+          {
+            "node": "Log Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Alert": {
+      "main": [
+        [
+          {
+            "node": "High Priority?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "High Priority?": {
+      "main": [
+        [
+          {
+            "node": "Alert Channel",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Queue for Review",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Alert Channel": {
+      "main": [
+        [
+          {
+            "node": "Trigger PagerDuty",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Trigger PagerDuty": {
+      "main": [
+        [
+          {
+            "node": "Email On-Call",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Queue for Review": {
+      "main": [
+        [
+          {
+            "node": "Acknowledge Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionMode": "sequential",
+    "timezone": "UTC"
+  },
+  "tags": [
+    "alerts",
+    "monitoring",
+    "real-time"
+  ]
+}

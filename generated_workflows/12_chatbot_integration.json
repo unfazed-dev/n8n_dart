@@ -1,0 +1,290 @@
+{
+  "name": "AI Chatbot Message Router",
+  "active": true,
+  "version": 1.0,
+  "nodes": [
+    {
+      "id": "1759504228539_89",
+      "name": "Incoming Message",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        100.0,
+        200.0
+      ],
+      "parameters": {
+        "path": "chatbot/message",
+        "method": "POST",
+        "authentication": "none"
+      }
+    },
+    {
+      "id": "1759504228539_90",
+      "name": "Parse Intent",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        350.0,
+        200.0
+      ],
+      "parameters": {
+        "functionCode": "const message = $input.item.json;\nconst text = (message.text || '').toLowerCase();\n\n// Simple intent classification (replace with NLP service)\nlet intent = 'general';\nlet requiresHuman = false;\n\nif (text.includes('price') || text.includes('cost')) {\n  intent = 'pricing';\n} else if (text.includes('support') || text.includes('help')) {\n  intent = 'support';\n  requiresHuman = true;\n} else if (text.includes('order') || text.includes('track')) {\n  intent = 'order_status';\n} else if (text.includes('cancel') || text.includes('refund')) {\n  intent = 'cancellation';\n  requiresHuman = true;\n}\n\nreturn {\n  userId: message.userId,\n  messageId: message.id,\n  text: message.text,\n  intent: intent,\n  requiresHuman: requiresHuman,\n  timestamp: new Date().toISOString()\n};\n"
+      }
+    },
+    {
+      "id": "1759504228539_91",
+      "name": "Log Conversation",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [
+        600.0,
+        200.0
+      ],
+      "parameters": {
+        "operation": "insert",
+        "table": "chat_messages"
+      },
+      "credentials": {
+        "postgres": {
+          "id": "credential_id",
+          "name": "PostgreSQL"
+        }
+      }
+    },
+    {
+      "id": "1759504228539_92",
+      "name": "Needs Human Agent?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        850.0,
+        200.0
+      ],
+      "parameters": {
+        "conditions": [
+          {
+            "leftValue": "={{$json.requiresHuman}}",
+            "operation": "equals",
+            "rightValue": true
+          }
+        ]
+      }
+    },
+    {
+      "id": "1759504228539_93",
+      "name": "Notify Support Team",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 1,
+      "position": [
+        100.0,
+        300.0
+      ],
+      "parameters": {
+        "channel": "#customer-support",
+        "text": "💬 Customer needs help: \"{{$json.text}}\" (User: {{$json.userId}})"
+      },
+      "credentials": {
+        "slackApi": {
+          "id": "credential_id",
+          "name": "Slack"
+        }
+      }
+    },
+    {
+      "id": "1759504228539_94",
+      "name": "Create Support Ticket",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        350.0,
+        300.0
+      ],
+      "parameters": {
+        "url": "https://api.zendesk.com/api/v2/tickets",
+        "method": "POST",
+        "body": {
+          "ticket": {
+            "subject": "Chat escalation: {{$json.intent}}",
+            "description": "={{$json.text}}",
+            "priority": "high"
+          }
+        }
+      }
+    },
+    {
+      "id": "1759504228539_95",
+      "name": "Transfer to Agent",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        600.0,
+        300.0
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseCode": 200,
+        "responseBody": {
+          "response": "Let me connect you with a support agent...",
+          "type": "human_transfer"
+        }
+      }
+    },
+    {
+      "id": "1759504228539_96",
+      "name": "Generate Auto Response",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        100.0,
+        400.0
+      ],
+      "parameters": {
+        "functionCode": "const intent = $input.item.json.intent;\n\nconst responses = {\n  pricing: 'Our pricing starts at $9/month. Visit example.com/pricing for details.',\n  order_status: 'You can check your order status at example.com/orders',\n  general: 'How can I help you today? Ask about pricing, orders, or support.'\n};\n\nreturn {\n  response: responses[intent] || responses.general,\n  type: 'automated',\n  intent: intent\n};\n"
+      }
+    },
+    {
+      "id": "1759504228539_97",
+      "name": "Log Bot Response",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [
+        350.0,
+        400.0
+      ],
+      "parameters": {
+        "operation": "insert",
+        "table": "bot_responses"
+      },
+      "credentials": {
+        "postgres": {
+          "id": "credential_id",
+          "name": "PostgreSQL"
+        }
+      }
+    },
+    {
+      "id": "1759504228539_98",
+      "name": "Send Auto Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        600.0,
+        400.0
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseCode": 200,
+        "responseBody": {
+          "response": "={{$json.response}}",
+          "type": "bot"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Incoming Message": {
+      "main": [
+        [
+          {
+            "node": "Parse Intent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Intent": {
+      "main": [
+        [
+          {
+            "node": "Log Conversation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Conversation": {
+      "main": [
+        [
+          {
+            "node": "Needs Human Agent?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Needs Human Agent?": {
+      "main": [
+        [
+          {
+            "node": "Notify Support Team",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Generate Auto Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify Support Team": {
+      "main": [
+        [
+          {
+            "node": "Create Support Ticket",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Support Ticket": {
+      "main": [
+        [
+          {
+            "node": "Transfer to Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Auto Response": {
+      "main": [
+        [
+          {
+            "node": "Log Bot Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Bot Response": {
+      "main": [
+        [
+          {
+            "node": "Send Auto Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionMode": "sequential",
+    "timezone": "UTC"
+  },
+  "tags": [
+    "chatbot",
+    "ai",
+    "customer-service"
+  ]
+}

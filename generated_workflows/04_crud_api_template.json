@@ -1,0 +1,221 @@
+{
+  "name": "PRODUCTS CRUD API",
+  "active": false,
+  "version": 1.0,
+  "nodes": [
+    {
+      "id": "1759504228531_23",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        100.0,
+        200.0
+      ],
+      "parameters": {
+        "path": "api/v1/products",
+        "method": "POST",
+        "authentication": "none"
+      }
+    },
+    {
+      "id": "1759504228531_24",
+      "name": "Route Request",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        350.0,
+        200.0
+      ],
+      "parameters": {
+        "functionCode": "const method = $input.item.json.headers['x-method'] || 'GET';\nconst id = $input.item.json.query?.id;\n\nreturn [{\n  json: {\n    method: method,\n    id: id,\n    body: $input.item.json.body\n  }\n}];\n"
+      }
+    },
+    {
+      "id": "1759504228531_25",
+      "name": "Create products",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [
+        600.0,
+        200.0
+      ],
+      "parameters": {
+        "operation": "insert",
+        "table": "products"
+      },
+      "credentials": {
+        "postgres": {
+          "id": "credential_id",
+          "name": "PostgreSQL"
+        }
+      }
+    },
+    {
+      "id": "1759504228531_26",
+      "name": "Read products",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [
+        100.0,
+        300.0
+      ],
+      "parameters": {
+        "operation": "select",
+        "table": "products"
+      },
+      "credentials": {
+        "postgres": {
+          "id": "credential_id",
+          "name": "PostgreSQL"
+        }
+      }
+    },
+    {
+      "id": "1759504228531_27",
+      "name": "Update products",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [
+        100.0,
+        400.0
+      ],
+      "parameters": {
+        "operation": "update",
+        "table": "products"
+      },
+      "credentials": {
+        "postgres": {
+          "id": "credential_id",
+          "name": "PostgreSQL"
+        }
+      }
+    },
+    {
+      "id": "1759504228531_28",
+      "name": "Delete products",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [
+        100.0,
+        500.0
+      ],
+      "parameters": {
+        "operation": "delete",
+        "table": "products"
+      },
+      "credentials": {
+        "postgres": {
+          "id": "credential_id",
+          "name": "PostgreSQL"
+        }
+      }
+    },
+    {
+      "id": "1759504228531_29",
+      "name": "Send Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        100.0,
+        600.0
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseCode": 200
+      }
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Route Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route Request": {
+      "main": [
+        [
+          {
+            "node": "Create products",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Read products",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Update products",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Delete products",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create products": {
+      "main": [
+        [
+          {
+            "node": "Send Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read products": {
+      "main": [
+        [
+          {
+            "node": "Send Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update products": {
+      "main": [
+        [
+          {
+            "node": "Send Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Delete products": {
+      "main": [
+        [
+          {
+            "node": "Send Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionMode": "sequential",
+    "timezone": "UTC"
+  },
+  "tags": [
+    "api",
+    "crud",
+    "database"
+  ]
+}

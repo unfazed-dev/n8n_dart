@@ -1,0 +1,257 @@
+{
+  "name": "IoT Sensor Data Pipeline",
+  "active": true,
+  "version": 1.0,
+  "nodes": [
+    {
+      "id": "1759504228536_63",
+      "name": "Receive Sensor Data",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        100.0,
+        200.0
+      ],
+      "parameters": {
+        "path": "iot/sensor-data",
+        "method": "POST",
+        "authentication": "none"
+      }
+    },
+    {
+      "id": "1759504228536_64",
+      "name": "Validate & Transform",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        350.0,
+        200.0
+      ],
+      "parameters": {
+        "functionCode": "// Validate sensor data\nconst data = $input.item.json;\n\nif (!data.deviceId || !data.sensorType || data.value === undefined) {\n  throw new Error('Invalid sensor data');\n}\n\n// Transform data\nreturn {\n  deviceId: data.deviceId,\n  sensorType: data.sensorType,\n  value: parseFloat(data.value),\n  timestamp: data.timestamp || new Date().toISOString(),\n  location: data.location || 'unknown',\n  battery: data.battery || 100\n};\n"
+      }
+    },
+    {
+      "id": "1759504228536_65",
+      "name": "Store Sensor Reading",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [
+        600.0,
+        200.0
+      ],
+      "parameters": {
+        "operation": "insert",
+        "table": "sensor_readings"
+      },
+      "credentials": {
+        "postgres": {
+          "id": "credential_id",
+          "name": "PostgreSQL"
+        }
+      }
+    },
+    {
+      "id": "1759504228536_66",
+      "name": "Value Out of Range?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        850.0,
+        200.0
+      ],
+      "parameters": {
+        "conditions": [
+          {
+            "leftValue": "={{$json.value}}",
+            "operation": "larger",
+            "rightValue": 100
+          }
+        ]
+      }
+    },
+    {
+      "id": "1759504228536_67",
+      "name": "Build Alert Message",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        100.0,
+        300.0
+      ],
+      "parameters": {
+        "functionCode": "const data = $input.item.json;\nreturn {\n  alert: true,\n  severity: data.value > 150 ? 'critical' : 'warning',\n  message: `Sensor ${data.deviceId} (${data.sensorType}) reading: ${data.value}`,\n  deviceId: data.deviceId,\n  value: data.value\n};\n"
+      }
+    },
+    {
+      "id": "1759504228536_68",
+      "name": "Log Alert",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [
+        350.0,
+        300.0
+      ],
+      "parameters": {
+        "operation": "insert",
+        "table": "sensor_alerts"
+      },
+      "credentials": {
+        "postgres": {
+          "id": "credential_id",
+          "name": "PostgreSQL"
+        }
+      }
+    },
+    {
+      "id": "1759504228536_69",
+      "name": "Send Alert to Ops",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 1,
+      "position": [
+        600.0,
+        300.0
+      ],
+      "parameters": {
+        "channel": "#iot-alerts",
+        "text": "🚨 {{$json.message}} - Severity: {{$json.severity}}"
+      },
+      "credentials": {
+        "slackApi": {
+          "id": "credential_id",
+          "name": "Slack"
+        }
+      }
+    },
+    {
+      "id": "1759504228536_70",
+      "name": "Email Ops Team",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 1,
+      "position": [
+        850.0,
+        300.0
+      ],
+      "parameters": {
+        "fromEmail": "iot@example.com",
+        "toEmail": "ops@example.com",
+        "subject": "IoT Alert: {{$json.severity}}",
+        "message": "Device alert triggered. Check Slack for details."
+      }
+    },
+    {
+      "id": "1759504228536_71",
+      "name": "Return Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        100.0,
+        400.0
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseCode": 200,
+        "responseBody": {
+          "status": "ok",
+          "message": "Sensor data processed"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Receive Sensor Data": {
+      "main": [
+        [
+          {
+            "node": "Validate & Transform",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate & Transform": {
+      "main": [
+        [
+          {
+            "node": "Store Sensor Reading",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store Sensor Reading": {
+      "main": [
+        [
+          {
+            "node": "Value Out of Range?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Value Out of Range?": {
+      "main": [
+        [
+          {
+            "node": "Build Alert Message",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Return Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Alert Message": {
+      "main": [
+        [
+          {
+            "node": "Log Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Alert": {
+      "main": [
+        [
+          {
+            "node": "Send Alert to Ops",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Alert to Ops": {
+      "main": [
+        [
+          {
+            "node": "Email Ops Team",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionMode": "sequential",
+    "timezone": "UTC"
+  },
+  "tags": [
+    "iot",
+    "sensors",
+    "real-time",
+    "monitoring"
+  ]
+}

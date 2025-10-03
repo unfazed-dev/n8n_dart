@@ -3,6 +3,10 @@ include: package:lints/recommended.yaml
 analyzer:
   exclude:
     - lib/src/flutter/**
+    # Workflow generator files contain n8n expressions with $json
+    # which look like Dart interpolations but are n8n template strings
+    - lib/src/workflow_generator/templates/**
+    - example/generate_workflows.dart
   strong-mode:
     implicit-casts: false
     implicit-dynamic: false
@@ -11,6 +15,8 @@ analyzer:
     missing_return: error
     todo: ignore
     deprecated_member_use_from_same_package: ignore
+    # Allow print in examples
+    avoid_print: ignore
 
 linter:
   rules:

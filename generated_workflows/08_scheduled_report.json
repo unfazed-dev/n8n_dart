@@ -1,0 +1,120 @@
+{
+  "name": "Scheduled Sales Report",
+  "active": false,
+  "version": 1.0,
+  "nodes": [
+    {
+      "id": "1759504228535_59",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [
+        100.0,
+        200.0
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 9 * * 1"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "1759504228535_60",
+      "name": "Fetch Data",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [
+        350.0,
+        200.0
+      ],
+      "parameters": {
+        "operation": "select",
+        "query": "SELECT * FROM analytics WHERE created_at >= NOW() - INTERVAL '7 days'"
+      },
+      "credentials": {
+        "postgres": {
+          "id": "credential_id",
+          "name": "PostgreSQL"
+        }
+      }
+    },
+    {
+      "id": "1759504228535_61",
+      "name": "Generate Report",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        600.0,
+        200.0
+      ],
+      "parameters": {
+        "functionCode": "const data = $input.all();\nconst report = {\n  totalRecords: data.length,\n  summary: 'Weekly report generated',\n  date: new Date().toISOString()\n};\n\nreturn [{\n  json: {\n    report,\n    reportHtml: '<h1>Weekly Report</h1><p>Total: ' + data.length + '</p>'\n  }\n}];\n"
+      }
+    },
+    {
+      "id": "1759504228535_62",
+      "name": "Send Report",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 1,
+      "position": [
+        850.0,
+        200.0
+      ],
+      "parameters": {
+        "fromEmail": "reports@example.com",
+        "toEmail": "team@example.com",
+        "subject": "Weekly Sales Report",
+        "message": "={{$json.reportHtml}}"
+      }
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Fetch Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Data": {
+      "main": [
+        [
+          {
+            "node": "Generate Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Report": {
+      "main": [
+        [
+          {
+            "node": "Send Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionMode": "sequential",
+    "timezone": "UTC"
+  },
+  "tags": [
+    "report",
+    "scheduled",
+    "email"
+  ]
+}

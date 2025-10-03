@@ -1,0 +1,436 @@
+{
+  "name": "Advanced Order Processing",
+  "active": false,
+  "version": 1.0,
+  "nodes": [
+    {
+      "id": "1759504228534_44",
+      "name": "Order Received",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        100.0,
+        200.0
+      ],
+      "parameters": {
+        "path": "orders/create",
+        "method": "POST",
+        "authentication": "none"
+      }
+    },
+    {
+      "id": "1759504228534_45",
+      "name": "Calculate Order Total",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        350.0,
+        200.0
+      ],
+      "parameters": {
+        "functionCode": "const { items, userId, shippingAddress } = $input.item.json.body;\n\nconst subtotal = items.reduce((sum, item) =>\n  sum + (item.price * item.quantity), 0\n);\nconst tax = subtotal * 0.1; // 10% tax\nconst shipping = subtotal > 50 ? 0 : 5.99; // Free shipping over $50\nconst total = subtotal + tax + shipping;\n\nreturn [{\n  json: {\n    orderId: 'ORD-' + Date.now(),\n    userId,\n    items,\n    shippingAddress,\n    subtotal,\n    tax,\n    shipping,\n    total,\n    status: 'pending'\n  }\n}];\n"
+      }
+    },
+    {
+      "id": "1759504228534_46",
+      "name": "Check Inventory",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [
+        600.0,
+        200.0
+      ],
+      "parameters": {
+        "operation": "select",
+        "query": "SELECT * FROM inventory WHERE product_id IN ({{$json.items}})"
+      },
+      "credentials": {
+        "postgres": {
+          "id": "credential_id",
+          "name": "PostgreSQL"
+        }
+      }
+    },
+    {
+      "id": "1759504228534_47",
+      "name": "Inventory Available?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        850.0,
+        200.0
+      ],
+      "parameters": {
+        "conditions": [
+          {
+            "leftValue": "={{$json.inStock}}",
+            "operation": "equals",
+            "rightValue": true
+          }
+        ]
+      }
+    },
+    {
+      "id": "1759504228534_48",
+      "name": "Notify Out of Stock",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 1,
+      "position": [
+        100.0,
+        300.0
+      ],
+      "parameters": {
+        "fromEmail": "orders@example.com",
+        "toEmail": "={{$json.customerEmail}}",
+        "subject": "Order on Hold - Items Out of Stock",
+        "message": "Some items in your order are currently out of stock."
+      }
+    },
+    {
+      "id": "1759504228534_49",
+      "name": "Return Out of Stock",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        350.0,
+        300.0
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseCode": 200,
+        "responseBody": {
+          "status": "on_hold",
+          "message": "Items out of stock"
+        }
+      }
+    },
+    {
+      "id": "1759504228534_50",
+      "name": "Process Payment",
+      "type": "n8n-nodes-base.stripe",
+      "typeVersion": 1,
+      "position": [
+        100.0,
+        400.0
+      ],
+      "parameters": {
+        "resource": "charge",
+        "operation": "create",
+        "amount": "={{$json.total * 100}}",
+        "currency": "usd"
+      },
+      "credentials": {
+        "stripeApi": {
+          "id": "credential_id",
+          "name": "Stripe"
+        }
+      }
+    },
+    {
+      "id": "1759504228534_51",
+      "name": "Payment Successful?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        350.0,
+        400.0
+      ],
+      "parameters": {
+        "conditions": [
+          {
+            "leftValue": "={{$json.status}}",
+            "operation": "equals",
+            "rightValue": "succeeded"
+          }
+        ]
+      }
+    },
+    {
+      "id": "1759504228534_52",
+      "name": "Save Failed Order",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [
+        100.0,
+        500.0
+      ],
+      "parameters": {
+        "operation": "insert",
+        "table": "failed_orders"
+      },
+      "credentials": {
+        "postgres": {
+          "id": "credential_id",
+          "name": "PostgreSQL"
+        }
+      }
+    },
+    {
+      "id": "1759504228534_53",
+      "name": "Payment Failed Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 1,
+      "position": [
+        350.0,
+        500.0
+      ],
+      "parameters": {
+        "fromEmail": "orders@example.com",
+        "toEmail": "={{$json.customerEmail}}",
+        "subject": "Payment Failed",
+        "message": "Your payment could not be processed."
+      }
+    },
+    {
+      "id": "1759504228534_54",
+      "name": "Create Order Record",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [
+        100.0,
+        600.0
+      ],
+      "parameters": {
+        "operation": "insert",
+        "table": "orders"
+      },
+      "credentials": {
+        "postgres": {
+          "id": "credential_id",
+          "name": "PostgreSQL"
+        }
+      }
+    },
+    {
+      "id": "1759504228534_55",
+      "name": "Update Inventory",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [
+        350.0,
+        600.0
+      ],
+      "parameters": {
+        "operation": "update",
+        "table": "inventory"
+      },
+      "credentials": {
+        "postgres": {
+          "id": "credential_id",
+          "name": "PostgreSQL"
+        }
+      }
+    },
+    {
+      "id": "1759504228534_56",
+      "name": "Notify Fulfillment Team",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 1,
+      "position": [
+        600.0,
+        600.0
+      ],
+      "parameters": {
+        "channel": "#fulfillment",
+        "text": "New order ready for processing: {{$json.orderId}}"
+      },
+      "credentials": {
+        "slackApi": {
+          "id": "credential_id",
+          "name": "Slack"
+        }
+      }
+    },
+    {
+      "id": "1759504228534_57",
+      "name": "Order Confirmation Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 1,
+      "position": [
+        850.0,
+        600.0
+      ],
+      "parameters": {
+        "fromEmail": "orders@example.com",
+        "toEmail": "={{$json.customerEmail}}",
+        "subject": "Order Confirmation - {{$json.orderId}}",
+        "message": "Thank you for your order!"
+      }
+    },
+    {
+      "id": "1759504228534_58",
+      "name": "Return Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1100.0,
+        600.0
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseCode": 200,
+        "responseBody": {
+          "status": "success",
+          "orderId": "={{$json.orderId}}"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Order Received": {
+      "main": [
+        [
+          {
+            "node": "Calculate Order Total",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate Order Total": {
+      "main": [
+        [
+          {
+            "node": "Check Inventory",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Inventory": {
+      "main": [
+        [
+          {
+            "node": "Inventory Available?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Inventory Available?": {
+      "main": [
+        [
+          {
+            "node": "Process Payment",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Notify Out of Stock",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify Out of Stock": {
+      "main": [
+        [
+          {
+            "node": "Return Out of Stock",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Payment": {
+      "main": [
+        [
+          {
+            "node": "Payment Successful?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Payment Successful?": {
+      "main": [
+        [
+          {
+            "node": "Create Order Record",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Save Failed Order",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Failed Order": {
+      "main": [
+        [
+          {
+            "node": "Payment Failed Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Order Record": {
+      "main": [
+        [
+          {
+            "node": "Update Inventory",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Inventory": {
+      "main": [
+        [
+          {
+            "node": "Notify Fulfillment Team",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify Fulfillment Team": {
+      "main": [
+        [
+          {
+            "node": "Order Confirmation Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Order Confirmation Email": {
+      "main": [
+        [
+          {
+            "node": "Return Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionMode": "sequential",
+    "timezone": "UTC"
+  },
+  "tags": [
+    "ecommerce",
+    "payment",
+    "inventory"
+  ]
+}

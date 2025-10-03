@@ -1,0 +1,157 @@
+{
+  "name": "Social Media Monitoring & Response",
+  "active": false,
+  "version": 1.0,
+  "nodes": [
+    {
+      "id": "1759504228537_72",
+      "name": "Check Every 15min",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [
+        100.0,
+        200.0
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 15
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "1759504228537_73",
+      "name": "Fetch Twitter Mentions",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        350.0,
+        200.0
+      ],
+      "parameters": {
+        "url": "https://api.twitter.com/2/tweets/search/recent",
+        "method": "GET",
+        "qs": {
+          "query": "@YourBrand",
+          "max_results": 10
+        },
+        "authentication": "oAuth2"
+      }
+    },
+    {
+      "id": "1759504228537_74",
+      "name": "Analyze Sentiment",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        600.0,
+        200.0
+      ],
+      "parameters": {
+        "functionCode": "const tweets = $input.item.json.data || [];\n\nreturn tweets.map(tweet => {\n  // Simple sentiment analysis (replace with actual AI service)\n  const text = tweet.text.toLowerCase();\n  let sentiment = 'neutral';\n\n  if (text.includes('love') || text.includes('great') || text.includes('awesome')) {\n    sentiment = 'positive';\n  } else if (text.includes('hate') || text.includes('bad') || text.includes('issue')) {\n    sentiment = 'negative';\n  }\n\n  return {\n    tweetId: tweet.id,\n    text: tweet.text,\n    sentiment: sentiment,\n    author: tweet.author_id\n  };\n});\n"
+      }
+    },
+    {
+      "id": "1759504228537_75",
+      "name": "Save Mentions",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [
+        850.0,
+        200.0
+      ],
+      "parameters": {
+        "operation": "insert",
+        "table": "social_mentions"
+      },
+      "credentials": {
+        "postgres": {
+          "id": "credential_id",
+          "name": "PostgreSQL"
+        }
+      }
+    },
+    {
+      "id": "1759504228537_76",
+      "name": "Is Negative?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        1100.0,
+        200.0
+      ],
+      "parameters": {
+        "conditions": [
+          {
+            "leftValue": "={{$json.sentiment}}",
+            "operation": "equals",
+            "rightValue": "negative"
+          }
+        ]
+      }
+    },
+    {
+      "id": "1759504228537_77",
+      "name": "Alert Support Team",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 1,
+      "position": [
+        100.0,
+        300.0
+      ],
+      "parameters": {
+        "channel": "#customer-support",
+        "text": "⚠️ Negative mention detected: {{$json.text}}"
+      },
+      "credentials": {
+        "slackApi": {
+          "id": "credential_id",
+          "name": "Slack"
+        }
+      }
+    },
+    {
+      "id": "1759504228537_78",
+      "name": "Email Social Team",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 1,
+      "position": [
+        350.0,
+        300.0
+      ],
+      "parameters": {
+        "fromEmail": "social@example.com",
+        "toEmail": "support@example.com",
+        "subject": "Urgent: Negative Social Media Mention",
+        "message": "Please respond to tweet: {{$json.tweetId}}"
+      }
+    },
+    {
+      "id": "1759504228537_79",
+      "name": "Log Positive Feedback",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        100.0,
+        400.0
+      ],
+      "parameters": {
+        "functionCode": "return {\n  type: 'positive_mention',\n  message: 'Great customer feedback received',\n  tweetId: $input.item.json.tweetId\n};\n"
+      }
+    }
+  ],
+  "connections": {},
+  "settings": {
+    "executionMode": "sequential",
+    "timezone": "UTC"
+  },
+  "tags": [
+    "social-media",
+    "monitoring",
+    "engagement"
+  ]
+}

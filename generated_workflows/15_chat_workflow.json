@@ -1,0 +1,413 @@
+{
+  "name": "Real-time Chat Message Handler",
+  "active": true,
+  "version": 1.0,
+  "nodes": [
+    {
+      "id": "1759504228542_120",
+      "name": "New Message",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        100.0,
+        200.0
+      ],
+      "parameters": {
+        "path": "chat/message",
+        "method": "POST",
+        "authentication": "none"
+      }
+    },
+    {
+      "id": "1759504228542_121",
+      "name": "Process Message",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        350.0,
+        200.0
+      ],
+      "parameters": {
+        "functionCode": "const msg = $input.item.json;\n\n// Validate\nif (!msg.senderId || !msg.channelId || !msg.content) {\n  throw new Error('Missing required fields: senderId, channelId, content');\n}\n\n// Detect message type\nlet messageType = 'text';\nif (msg.content.startsWith('http://') || msg.content.startsWith('https://')) {\n  messageType = 'link';\n} else if (msg.fileUrl) {\n  messageType = 'file';\n}\n\n// Check for mentions\nconst mentions = [];\nconst mentionRegex = /@(\\w+)/g;\nlet match;\nwhile ((match = mentionRegex.exec(msg.content)) !== null) {\n  mentions.push(match[1]);\n}\n\nreturn {\n  messageId: `MSG${Date.now()}`,\n  senderId: msg.senderId,\n  senderName: msg.senderName || 'Unknown',\n  channelId: msg.channelId,\n  content: msg.content,\n  messageType: messageType,\n  mentions: mentions,\n  fileUrl: msg.fileUrl || null,\n  timestamp: new Date().toISOString(),\n  edited: false\n};\n"
+      }
+    },
+    {
+      "id": "1759504228542_122",
+      "name": "Save Message",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [
+        600.0,
+        200.0
+      ],
+      "parameters": {
+        "operation": "insert",
+        "table": "chat_messages"
+      },
+      "credentials": {
+        "postgres": {
+          "id": "credential_id",
+          "name": "PostgreSQL"
+        }
+      }
+    },
+    {
+      "id": "1759504228542_123",
+      "name": "Update Channel Activity",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [
+        850.0,
+        200.0
+      ],
+      "parameters": {
+        "operation": "update",
+        "table": "channels",
+        "where": "id = '{{$json.channelId}}'",
+        "set": {
+          "lastActivity": "{{$json.timestamp}}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "credential_id",
+          "name": "PostgreSQL"
+        }
+      }
+    },
+    {
+      "id": "1759504228542_124",
+      "name": "Has Mentions?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        1100.0,
+        200.0
+      ],
+      "parameters": {
+        "conditions": [
+          {
+            "leftValue": "={{$json.mentions.length}}",
+            "operation": "larger",
+            "rightValue": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "1759504228542_125",
+      "name": "Prepare Notifications",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        100.0,
+        300.0
+      ],
+      "parameters": {
+        "functionCode": "const data = $input.item.json;\n\nreturn data.mentions.map(username => ({\n  recipientUsername: username,\n  messageId: data.messageId,\n  senderId: data.senderId,\n  senderName: data.senderName,\n  channelId: data.channelId,\n  preview: data.content.substring(0, 100),\n  type: 'mention'\n}));\n"
+      }
+    },
+    {
+      "id": "1759504228542_126",
+      "name": "Queue Notifications",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [
+        350.0,
+        300.0
+      ],
+      "parameters": {
+        "operation": "insert",
+        "table": "notifications"
+      },
+      "credentials": {
+        "postgres": {
+          "id": "credential_id",
+          "name": "PostgreSQL"
+        }
+      }
+    },
+    {
+      "id": "1759504228542_127",
+      "name": "Notify Mentioned Users",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 1,
+      "position": [
+        600.0,
+        300.0
+      ],
+      "parameters": {
+        "channel": "#chat-notifications",
+        "text": "💬 {{$json.senderName}} mentioned @{{$json.recipientUsername}} in {{$json.channelId}}"
+      },
+      "credentials": {
+        "slackApi": {
+          "id": "credential_id",
+          "name": "Slack"
+        }
+      }
+    },
+    {
+      "id": "1759504228542_128",
+      "name": "Log Activity",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        100.0,
+        400.0
+      ],
+      "parameters": {
+        "functionCode": "return {\n  type: 'message_sent',\n  messageId: $input.item.json.messageId,\n  channelId: $input.item.json.channelId\n};\n"
+      }
+    },
+    {
+      "id": "1759504228542_129",
+      "name": "Content Moderation",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        350.0,
+        400.0
+      ],
+      "parameters": {
+        "functionCode": "const content = ($input.item.json.content || '').toLowerCase();\n\n// Simple spam detection\nconst spamKeywords = ['buy now', 'click here', 'free money', 'limited offer'];\nconst isSpam = spamKeywords.some(keyword => content.includes(keyword));\n\n// Check for excessive caps\nconst capsRatio = (content.match(/[A-Z]/g) || []).length / content.length;\nconst isYelling = capsRatio > 0.7 && content.length > 10;\n\nreturn {\n  messageId: $input.item.json.messageId,\n  isSpam: isSpam,\n  isYelling: isYelling,\n  requiresReview: isSpam || isYelling,\n  flagReason: isSpam ? 'potential spam' : (isYelling ? 'excessive caps' : null)\n};\n"
+      }
+    },
+    {
+      "id": "1759504228542_130",
+      "name": "Needs Review?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        600.0,
+        400.0
+      ],
+      "parameters": {
+        "conditions": [
+          {
+            "leftValue": "={{$json.requiresReview}}",
+            "operation": "equals",
+            "rightValue": true
+          }
+        ]
+      }
+    },
+    {
+      "id": "1759504228542_131",
+      "name": "Flag for Moderation",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [
+        100.0,
+        500.0
+      ],
+      "parameters": {
+        "operation": "insert",
+        "table": "moderation_queue"
+      },
+      "credentials": {
+        "postgres": {
+          "id": "credential_id",
+          "name": "PostgreSQL"
+        }
+      }
+    },
+    {
+      "id": "1759504228542_132",
+      "name": "Alert Moderators",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 1,
+      "position": [
+        350.0,
+        500.0
+      ],
+      "parameters": {
+        "channel": "#moderation",
+        "text": "⚠️ Message flagged: {{$json.messageId}} - Reason: {{$json.flagReason}}"
+      },
+      "credentials": {
+        "slackApi": {
+          "id": "credential_id",
+          "name": "Slack"
+        }
+      }
+    },
+    {
+      "id": "1759504228542_133",
+      "name": "Broadcast Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        100.0,
+        600.0
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseCode": 200,
+        "responseBody": {
+          "status": "sent",
+          "messageId": "={{$json.messageId}}",
+          "timestamp": "={{$json.timestamp}}"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "New Message": {
+      "main": [
+        [
+          {
+            "node": "Process Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Message": {
+      "main": [
+        [
+          {
+            "node": "Save Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Message": {
+      "main": [
+        [
+          {
+            "node": "Update Channel Activity",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Channel Activity": {
+      "main": [
+        [
+          {
+            "node": "Has Mentions?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Mentions?": {
+      "main": [
+        [
+          {
+            "node": "Prepare Notifications",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Activity",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Notifications": {
+      "main": [
+        [
+          {
+            "node": "Queue Notifications",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Queue Notifications": {
+      "main": [
+        [
+          {
+            "node": "Notify Mentioned Users",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Activity": {
+      "main": [
+        [
+          {
+            "node": "Content Moderation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify Mentioned Users": {
+      "main": [
+        [
+          {
+            "node": "Content Moderation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Content Moderation": {
+      "main": [
+        [
+          {
+            "node": "Needs Review?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Needs Review?": {
+      "main": [
+        [
+          {
+            "node": "Flag for Moderation",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Broadcast Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Flag for Moderation": {
+      "main": [
+        [
+          {
+            "node": "Alert Moderators",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionMode": "sequential",
+    "timezone": "UTC"
+  },
+  "tags": [
+    "chat",
+    "messaging",
+    "real-time",
+    "communication"
+  ]
+}
