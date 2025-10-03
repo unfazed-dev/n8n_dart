@@ -4,7 +4,7 @@
   "version": 1.0,
   "nodes": [
     {
-      "id": "1759504228528_5",
+      "id": "1759505110805_5",
       "name": "Registration Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1,
@@ -19,7 +19,7 @@
       }
     },
     {
-      "id": "1759504228528_6",
+      "id": "1759505110805_6",
       "name": "Validate & Hash Password",
       "type": "n8n-nodes-base.function",
       "typeVersion": 1,
@@ -32,7 +32,7 @@
       }
     },
     {
-      "id": "1759504228528_7",
+      "id": "1759505110805_7",
       "name": "Check Existing User",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 1,
@@ -52,7 +52,7 @@
       }
     },
     {
-      "id": "1759504228528_8",
+      "id": "1759505110805_8",
       "name": "User Exists?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 1,
@@ -71,7 +71,7 @@
       }
     },
     {
-      "id": "1759504228528_9",
+      "id": "1759505110805_9",
       "name": "Return Error",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
@@ -88,7 +88,7 @@
       }
     },
     {
-      "id": "1759504228528_10",
+      "id": "1759505110805_10",
       "name": "Create User",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 1,
@@ -108,7 +108,7 @@
       }
     },
     {
-      "id": "1759504228528_11",
+      "id": "1759505110805_11",
       "name": "Generate Verification Token",
       "type": "n8n-nodes-base.function",
       "typeVersion": 1,
@@ -121,7 +121,7 @@
       }
     },
     {
-      "id": "1759504228528_12",
+      "id": "1759505110805_12",
       "name": "Send Verification Email",
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 1,
@@ -137,7 +137,7 @@
       }
     },
     {
-      "id": "1759504228528_13",
+      "id": "1759505110805_13",
       "name": "Return Success",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,

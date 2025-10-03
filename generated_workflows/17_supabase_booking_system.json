@@ -1,0 +1,459 @@
+{
+  "name": "Supabase Booking System",
+  "active": true,
+  "version": 1.0,
+  "nodes": [
+    {
+      "id": "1759505110823_149",
+      "name": "Booking Request",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        100.0,
+        200.0
+      ],
+      "parameters": {
+        "path": "supabase/bookings/create",
+        "method": "POST",
+        "authentication": "none"
+      }
+    },
+    {
+      "id": "1759505110823_150",
+      "name": "Validate & Prepare",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        350.0,
+        200.0
+      ],
+      "parameters": {
+        "functionCode": "const booking = $input.item.json;\n\n// Validate required fields\nif (!booking.customer_name || !booking.customer_email || !booking.service_id || !booking.booking_date || !booking.booking_time) {\n  throw new Error('Missing required fields');\n}\n\n// Parse date and validate\nconst bookingDateTime = new Date(`${booking.booking_date}T${booking.booking_time}`);\nconst now = new Date();\n\nif (bookingDateTime < now) {\n  throw new Error('Cannot book appointments in the past');\n}\n\n// Prepare data for Supabase\nreturn {\n  customer_name: booking.customer_name,\n  customer_email: booking.customer_email,\n  customer_phone: booking.customer_phone || null,\n  service_id: booking.service_id,\n  booking_date: booking.booking_date,\n  booking_time: booking.booking_time,\n  duration_minutes: booking.duration_minutes || 60,\n  notes: booking.notes || '',\n  status: 'pending',\n  created_at: now.toISOString(),\n  metadata: booking.metadata || {}\n};\n"
+      }
+    },
+    {
+      "id": "1759505110823_151",
+      "name": "Check Availability",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        600.0,
+        200.0
+      ],
+      "parameters": {
+        "url": "https://your-project.supabase.co/rest/v1/bookings",
+        "method": "GET",
+        "qs": {
+          "booking_date": "eq.{{$json.booking_date}}",
+          "booking_time": "eq.{{$json.booking_time}}",
+          "status": "neq.cancelled",
+          "select": "id"
+        },
+        "headers": {
+          "apikey": "your-supabase-anon-key",
+          "Authorization": "Bearer your-supabase-anon-key"
+        }
+      }
+    },
+    {
+      "id": "1759505110823_152",
+      "name": "Evaluate Availability",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        850.0,
+        200.0
+      ],
+      "parameters": {
+        "functionCode": "const bookingData = $input.first().json;\nconst existingBookings = $input.last().json;\n\nreturn {\n  ...bookingData,\n  isAvailable: existingBookings.length === 0,\n  conflictCount: existingBookings.length\n};\n"
+      }
+    },
+    {
+      "id": "1759505110823_153",
+      "name": "Slot Available?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        1100.0,
+        200.0
+      ],
+      "parameters": {
+        "conditions": [
+          {
+            "leftValue": "={{$json.isAvailable}}",
+            "operation": "equals",
+            "rightValue": true
+          }
+        ]
+      }
+    },
+    {
+      "id": "1759505110823_154",
+      "name": "Return Conflict",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        100.0,
+        300.0
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseCode": 409,
+        "responseBody": {
+          "success": false,
+          "error": "Time slot not available",
+          "message": "The selected time is already booked. Please choose another time."
+        }
+      }
+    },
+    {
+      "id": "1759505110823_155",
+      "name": "Create Booking in Supabase",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        100.0,
+        400.0
+      ],
+      "parameters": {
+        "url": "https://your-project.supabase.co/rest/v1/bookings",
+        "method": "POST",
+        "headers": {
+          "apikey": "your-supabase-anon-key",
+          "Authorization": "Bearer your-supabase-anon-key",
+          "Content-Type": "application/json",
+          "Prefer": "return=representation"
+        },
+        "body": {
+          "customer_name": "={{$json.customer_name}}",
+          "customer_email": "={{$json.customer_email}}",
+          "customer_phone": "={{$json.customer_phone}}",
+          "service_id": "={{$json.service_id}}",
+          "booking_date": "={{$json.booking_date}}",
+          "booking_time": "={{$json.booking_time}}",
+          "duration_minutes": "={{$json.duration_minutes}}",
+          "notes": "={{$json.notes}}",
+          "status": "confirmed",
+          "metadata": "={{$json.metadata}}"
+        }
+      }
+    },
+    {
+      "id": "1759505110823_156",
+      "name": "Get Service Details",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        350.0,
+        400.0
+      ],
+      "parameters": {
+        "url": "https://your-project.supabase.co/rest/v1/services?id=eq.{{$json.service_id}}",
+        "method": "GET",
+        "headers": {
+          "apikey": "your-supabase-anon-key",
+          "Authorization": "Bearer your-supabase-anon-key"
+        }
+      }
+    },
+    {
+      "id": "1759505110823_157",
+      "name": "Prepare Confirmation Data",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        600.0,
+        400.0
+      ],
+      "parameters": {
+        "functionCode": "const booking = $input.first().json[0];\nconst service = $input.last().json[0];\n\n// Generate confirmation code\nconst confirmationCode = Math.random().toString(36).substring(2, 8).toUpperCase();\n\nreturn {\n  booking_id: booking.id,\n  confirmation_code: confirmationCode,\n  customer_name: booking.customer_name,\n  customer_email: booking.customer_email,\n  customer_phone: booking.customer_phone,\n  service_name: service.name,\n  service_price: service.price,\n  service_duration: booking.duration_minutes,\n  booking_date: booking.booking_date,\n  booking_time: booking.booking_time,\n  status: booking.status,\n  notes: booking.notes\n};\n"
+      }
+    },
+    {
+      "id": "1759505110823_158",
+      "name": "Save Confirmation Code",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        850.0,
+        400.0
+      ],
+      "parameters": {
+        "url": "https://your-project.supabase.co/rest/v1/bookings?id=eq.{{$json.booking_id}}",
+        "method": "PATCH",
+        "headers": {
+          "apikey": "your-supabase-anon-key",
+          "Authorization": "Bearer your-supabase-anon-key",
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "confirmation_code": "={{$json.confirmation_code}}"
+        }
+      }
+    },
+    {
+      "id": "1759505110823_159",
+      "name": "Send Confirmation Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 1,
+      "position": [
+        1100.0,
+        400.0
+      ],
+      "parameters": {
+        "fromEmail": "bookings@example.com",
+        "toEmail": "={{$json.customer_email}}",
+        "subject": "Booking Confirmed - {{$json.confirmation_code}}",
+        "message": "Hi {{$json.customer_name}},\n\nYour booking has been confirmed! ✅\n\n📅 Booking Details:\n━━━━━━━━━━━━━━━━━━━━━━━━━\n• Confirmation Code: {{$json.confirmation_code}}\n• Service: {{$json.service_name}}\n• Date: {{$json.booking_date}}\n• Time: {{$json.booking_time}}\n• Duration: {{$json.service_duration}} minutes\n• Price: ${{$json.service_price}}\n\n📝 Notes:\n{{$json.notes}}\n\n━━━━━━━━━━━━━━━━━━━━━━━━━\n\nTo cancel or reschedule, please use your confirmation code.\n\nNeed help? Reply to this email or call us.\n\nSee you soon!\n\nBest regards,\nYour Team\n"
+      }
+    },
+    {
+      "id": "1759505110823_160",
+      "name": "Check SMS Eligibility",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        1350.0,
+        400.0
+      ],
+      "parameters": {
+        "functionCode": "const data = $input.item.json;\n\nif (data.customer_phone && data.customer_phone.length > 0) {\n  return {\n    ...data,\n    send_sms: true,\n    sms_message: `Booking confirmed for ${data.booking_date} at ${data.booking_time}. Code: ${data.confirmation_code}`\n  };\n}\n\nreturn {\n  ...data,\n  send_sms: false\n};\n"
+      }
+    },
+    {
+      "id": "1759505110823_161",
+      "name": "Notify via Supabase Realtime",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        1600.0,
+        400.0
+      ],
+      "parameters": {
+        "url": "https://your-project.supabase.co/rest/v1/rpc/notify_new_booking",
+        "method": "POST",
+        "headers": {
+          "apikey": "your-supabase-anon-key",
+          "Authorization": "Bearer your-supabase-anon-key",
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "booking_id": "={{$json.booking_id}}",
+          "customer_name": "={{$json.customer_name}}",
+          "service_name": "={{$json.service_name}}",
+          "booking_time": "={{$json.booking_date}} {{$json.booking_time}}"
+        }
+      }
+    },
+    {
+      "id": "1759505110823_162",
+      "name": "Notify Team",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 1,
+      "position": [
+        1850.0,
+        400.0
+      ],
+      "parameters": {
+        "channel": "#bookings",
+        "text": "📅 New booking: {{$json.customer_name}} - {{$json.service_name}} on {{$json.booking_date}} at {{$json.booking_time}} (Code: {{$json.confirmation_code}})"
+      },
+      "credentials": {
+        "slackApi": {
+          "id": "credential_id",
+          "name": "Slack"
+        }
+      }
+    },
+    {
+      "id": "1759505110823_163",
+      "name": "Return Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        2100.0,
+        400.0
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseCode": 201,
+        "responseBody": {
+          "success": true,
+          "booking_id": "={{$json.booking_id}}",
+          "confirmation_code": "={{$json.confirmation_code}}",
+          "message": "Booking confirmed successfully",
+          "booking": {
+            "customer_name": "={{$json.customer_name}}",
+            "service_name": "={{$json.service_name}}",
+            "date": "={{$json.booking_date}}",
+            "time": "={{$json.booking_time}}",
+            "duration": "={{$json.service_duration}}",
+            "price": "={{$json.service_price}}"
+          }
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Booking Request": {
+      "main": [
+        [
+          {
+            "node": "Validate & Prepare",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate & Prepare": {
+      "main": [
+        [
+          {
+            "node": "Check Availability",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Availability": {
+      "main": [
+        [
+          {
+            "node": "Evaluate Availability",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Evaluate Availability": {
+      "main": [
+        [
+          {
+            "node": "Slot Available?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Slot Available?": {
+      "main": [
+        [
+          {
+            "node": "Create Booking in Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Return Conflict",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Booking in Supabase": {
+      "main": [
+        [
+          {
+            "node": "Get Service Details",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Service Details": {
+      "main": [
+        [
+          {
+            "node": "Prepare Confirmation Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Confirmation Data": {
+      "main": [
+        [
+          {
+            "node": "Save Confirmation Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Confirmation Code": {
+      "main": [
+        [
+          {
+            "node": "Send Confirmation Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Confirmation Email": {
+      "main": [
+        [
+          {
+            "node": "Check SMS Eligibility",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check SMS Eligibility": {
+      "main": [
+        [
+          {
+            "node": "Notify via Supabase Realtime",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify via Supabase Realtime": {
+      "main": [
+        [
+          {
+            "node": "Notify Team",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify Team": {
+      "main": [
+        [
+          {
+            "node": "Return Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionMode": "sequential",
+    "timezone": "UTC"
+  },
+  "tags": [
+    "supabase",
+    "booking",
+    "real-time",
+    "appointments"
+  ]
+}

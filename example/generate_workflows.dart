@@ -57,6 +57,9 @@ void main() async {
   // Example 14: Invoice Generation for Bookings
   await example14InvoiceWorkflow(outputDir.path);
 
+  // Example 15: Supabase Booking System
+  await example15SupabaseBooking(outputDir.path);
+
   print('\n✅ All workflows generated successfully!');
   print('📁 Check the "generated_workflows" directory for JSON files.');
   print('\n📤 Import these files into n8n:');
@@ -1920,4 +1923,308 @@ return {
 
   await workflow.saveToFile('$outputPath/16_invoice_generation.json');
   print('   ✓ Generated: 16_invoice_generation.json\n');
+}
+
+/// Example 15: Supabase Booking System
+/// Complete booking system using Supabase as backend with real-time features
+Future<void> example15SupabaseBooking(String outputPath) async {
+  print('📝 Example 15: Supabase Booking System');
+
+  final workflow = WorkflowBuilder.create()
+      .name('Supabase Booking System')
+      .tags(['supabase', 'booking', 'real-time', 'appointments'])
+      .active(true)
+      // Receive booking request
+      .webhookTrigger(
+        name: 'Booking Request',
+        path: 'supabase/bookings/create',
+        method: 'POST',
+      )
+      // Validate booking data
+      .function(
+        name: 'Validate & Prepare',
+        code: r'''
+const booking = $input.item.json;
+
+// Validate required fields
+if (!booking.customer_name || !booking.customer_email || !booking.service_id || !booking.booking_date || !booking.booking_time) {
+  throw new Error('Missing required fields');
+}
+
+// Parse date and validate
+const bookingDateTime = new Date(`${booking.booking_date}T${booking.booking_time}`);
+const now = new Date();
+
+if (bookingDateTime < now) {
+  throw new Error('Cannot book appointments in the past');
+}
+
+// Prepare data for Supabase
+return {
+  customer_name: booking.customer_name,
+  customer_email: booking.customer_email,
+  customer_phone: booking.customer_phone || null,
+  service_id: booking.service_id,
+  booking_date: booking.booking_date,
+  booking_time: booking.booking_time,
+  duration_minutes: booking.duration_minutes || 60,
+  notes: booking.notes || '',
+  status: 'pending',
+  created_at: now.toISOString(),
+  metadata: booking.metadata || {}
+};
+''',
+      )
+      // Check availability in Supabase
+      .httpRequest(
+        name: 'Check Availability',
+        url: 'https://your-project.supabase.co/rest/v1/bookings',
+        method: 'GET',
+        additionalParams: {
+          'qs': {
+            'booking_date': r'eq.{{$json.booking_date}}',
+            'booking_time': r'eq.{{$json.booking_time}}',
+            'status': r'neq.cancelled',
+            'select': 'id',
+          },
+          'headers': {
+            'apikey': 'your-supabase-anon-key',
+            'Authorization': 'Bearer your-supabase-anon-key',
+          },
+        },
+      )
+      // Check if slot is available
+      .function(
+        name: 'Evaluate Availability',
+        code: r'''
+const bookingData = $input.first().json;
+const existingBookings = $input.last().json;
+
+return {
+  ...bookingData,
+  isAvailable: existingBookings.length === 0,
+  conflictCount: existingBookings.length
+};
+''',
+      )
+      .ifNode(
+        name: 'Slot Available?',
+        conditions: [
+          {
+            'leftValue': r'={{$json.isAvailable}}',
+            'operation': 'equals',
+            'rightValue': true,
+          }
+        ],
+      )
+      // Unavailable - return error
+      .newRow()
+      .respondToWebhook(
+        name: 'Return Conflict',
+        responseCode: 409,
+        responseBody: {
+          'success': false,
+          'error': 'Time slot not available',
+          'message': 'The selected time is already booked. Please choose another time.',
+        },
+      )
+      // Available - create booking in Supabase
+      .newRow()
+      .httpRequest(
+        name: 'Create Booking in Supabase',
+        url: 'https://your-project.supabase.co/rest/v1/bookings',
+        method: 'POST',
+        additionalParams: {
+          'headers': {
+            'apikey': 'your-supabase-anon-key',
+            'Authorization': 'Bearer your-supabase-anon-key',
+            'Content-Type': 'application/json',
+            'Prefer': 'return=representation',
+          },
+          'body': {
+            'customer_name': r'={{$json.customer_name}}',
+            'customer_email': r'={{$json.customer_email}}',
+            'customer_phone': r'={{$json.customer_phone}}',
+            'service_id': r'={{$json.service_id}}',
+            'booking_date': r'={{$json.booking_date}}',
+            'booking_time': r'={{$json.booking_time}}',
+            'duration_minutes': r'={{$json.duration_minutes}}',
+            'notes': r'={{$json.notes}}',
+            'status': 'confirmed',
+            'metadata': r'={{$json.metadata}}',
+          },
+        },
+      )
+      // Get service details from Supabase
+      .httpRequest(
+        name: 'Get Service Details',
+        url: r'https://your-project.supabase.co/rest/v1/services?id=eq.{{$json.service_id}}',
+        method: 'GET',
+        additionalParams: {
+          'headers': {
+            'apikey': 'your-supabase-anon-key',
+            'Authorization': 'Bearer your-supabase-anon-key',
+          },
+        },
+      )
+      // Merge booking and service data
+      .function(
+        name: 'Prepare Confirmation Data',
+        code: r'''
+const booking = $input.first().json[0];
+const service = $input.last().json[0];
+
+// Generate confirmation code
+const confirmationCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+
+return {
+  booking_id: booking.id,
+  confirmation_code: confirmationCode,
+  customer_name: booking.customer_name,
+  customer_email: booking.customer_email,
+  customer_phone: booking.customer_phone,
+  service_name: service.name,
+  service_price: service.price,
+  service_duration: booking.duration_minutes,
+  booking_date: booking.booking_date,
+  booking_time: booking.booking_time,
+  status: booking.status,
+  notes: booking.notes
+};
+''',
+      )
+      // Update booking with confirmation code in Supabase
+      .httpRequest(
+        name: 'Save Confirmation Code',
+        url: r'https://your-project.supabase.co/rest/v1/bookings?id=eq.{{$json.booking_id}}',
+        method: 'PATCH',
+        additionalParams: {
+          'headers': {
+            'apikey': 'your-supabase-anon-key',
+            'Authorization': 'Bearer your-supabase-anon-key',
+            'Content-Type': 'application/json',
+          },
+          'body': {
+            'confirmation_code': r'={{$json.confirmation_code}}',
+          },
+        },
+      )
+      // Send confirmation email via Supabase Edge Function or direct SMTP
+      .emailSend(
+        name: 'Send Confirmation Email',
+        fromEmail: 'bookings@example.com',
+        toEmail: r'={{$json.customer_email}}',
+        subject: r'Booking Confirmed - {{$json.confirmation_code}}',
+        message: r'''
+Hi {{$json.customer_name}},
+
+Your booking has been confirmed! ✅
+
+📅 Booking Details:
+━━━━━━━━━━━━━━━━━━━━━━━━━
+• Confirmation Code: {{$json.confirmation_code}}
+• Service: {{$json.service_name}}
+• Date: {{$json.booking_date}}
+• Time: {{$json.booking_time}}
+• Duration: {{$json.service_duration}} minutes
+• Price: ${{$json.service_price}}
+
+📝 Notes:
+{{$json.notes}}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━
+
+To cancel or reschedule, please use your confirmation code.
+
+Need help? Reply to this email or call us.
+
+See you soon!
+
+Best regards,
+Your Team
+''',
+      )
+      // Send SMS notification if phone provided
+      .function(
+        name: 'Check SMS Eligibility',
+        code: r'''
+const data = $input.item.json;
+
+if (data.customer_phone && data.customer_phone.length > 0) {
+  return {
+    ...data,
+    send_sms: true,
+    sms_message: `Booking confirmed for ${data.booking_date} at ${data.booking_time}. Code: ${data.confirmation_code}`
+  };
+}
+
+return {
+  ...data,
+  send_sms: false
+};
+''',
+      )
+      // Trigger Supabase real-time notification
+      .httpRequest(
+        name: 'Notify via Supabase Realtime',
+        url: 'https://your-project.supabase.co/rest/v1/rpc/notify_new_booking',
+        method: 'POST',
+        additionalParams: {
+          'headers': {
+            'apikey': 'your-supabase-anon-key',
+            'Authorization': 'Bearer your-supabase-anon-key',
+            'Content-Type': 'application/json',
+          },
+          'body': {
+            'booking_id': r'={{$json.booking_id}}',
+            'customer_name': r'={{$json.customer_name}}',
+            'service_name': r'={{$json.service_name}}',
+            'booking_time': r'={{$json.booking_date}} {{$json.booking_time}}',
+          },
+        },
+      )
+      // Log to Slack
+      .slack(
+        name: 'Notify Team',
+        channel: '#bookings',
+        text: r'📅 New booking: {{$json.customer_name}} - {{$json.service_name}} on {{$json.booking_date}} at {{$json.booking_time}} (Code: {{$json.confirmation_code}})',
+      )
+      // Return success response
+      .respondToWebhook(
+        name: 'Return Success',
+        responseCode: 201,
+        responseBody: {
+          'success': true,
+          'booking_id': r'={{$json.booking_id}}',
+          'confirmation_code': r'={{$json.confirmation_code}}',
+          'message': 'Booking confirmed successfully',
+          'booking': {
+            'customer_name': r'={{$json.customer_name}}',
+            'service_name': r'={{$json.service_name}}',
+            'date': r'={{$json.booking_date}}',
+            'time': r'={{$json.booking_time}}',
+            'duration': r'={{$json.service_duration}}',
+            'price': r'={{$json.service_price}}',
+          },
+        },
+      )
+      // Connect all nodes
+      .connect('Booking Request', 'Validate & Prepare')
+      .connect('Validate & Prepare', 'Check Availability')
+      .connect('Check Availability', 'Evaluate Availability')
+      .connect('Evaluate Availability', 'Slot Available?')
+      .connect('Slot Available?', 'Return Conflict', sourceIndex: 1)
+      .connect('Slot Available?', 'Create Booking in Supabase', sourceIndex: 0)
+      .connect('Create Booking in Supabase', 'Get Service Details')
+      .connect('Get Service Details', 'Prepare Confirmation Data')
+      .connect('Prepare Confirmation Data', 'Save Confirmation Code')
+      .connect('Save Confirmation Code', 'Send Confirmation Email')
+      .connect('Send Confirmation Email', 'Check SMS Eligibility')
+      .connect('Check SMS Eligibility', 'Notify via Supabase Realtime')
+      .connect('Notify via Supabase Realtime', 'Notify Team')
+      .connect('Notify Team', 'Return Success')
+      .build();
+
+  await workflow.saveToFile('$outputPath/17_supabase_booking_system.json');
+  print('   ✓ Generated: 17_supabase_booking_system.json\n');
 }
