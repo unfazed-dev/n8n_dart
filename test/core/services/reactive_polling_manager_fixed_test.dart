@@ -863,7 +863,7 @@ void main() {
         ));
 
         var count = 0;
-        var statusSequence = ['running', 'running', 'waiting', 'waiting', 'success'];
+        final statusSequence = ['running', 'running', 'waiting', 'waiting', 'success'];
 
         Future<Map<String, String>> poll() async {
           final status = count < statusSequence.length ? statusSequence[count] : 'success';
@@ -1082,8 +1082,6 @@ void main() {
         async.elapse(const Duration(milliseconds: 50));
         async.flushMicrotasks();
 
-        final countBefore = count1;
-
         // Start new adaptive polling for same execution (should stop first)
         final sub2 = manager.startAdaptivePolling(
           'exec-1',
@@ -1096,8 +1094,9 @@ void main() {
         async.elapse(const Duration(milliseconds: 50));
         async.flushMicrotasks();
 
-        // First polling should have stopped
-        expect(count2, greaterThan(0));
+        // First polling should have stopped, second should have started
+        expect(count1, greaterThan(0)); // First polling ran initially
+        expect(count2, greaterThan(0)); // Second polling took over
 
         sub1.cancel();
         sub2.cancel();
@@ -1151,12 +1150,9 @@ void main() {
       fakeAsync((async) {
         final manager = ReactivePollingManager(const PollingConfig(
           baseInterval: Duration(milliseconds: 50),
-          maxConsecutiveErrors: 3,
         ));
 
-        var pollCount = 0;
         Future<Map<String, String>> poll() async {
-          pollCount++;
           throw Exception('Always fails');
         }
 
@@ -1201,7 +1197,7 @@ void main() {
           baseInterval: Duration(milliseconds: 100),
         ));
 
-        var statusChanges = ['running', 'running', 'waiting', 'success'];
+        final statusChanges = ['running', 'running', 'waiting', 'success'];
         var count = 0;
 
         Future<Map<String, String>> poll() async {
@@ -1279,7 +1275,7 @@ void main() {
           baseInterval: Duration(milliseconds: 50),
         ));
 
-        var statuses = ['running', 'running', 'waiting', 'running', 'success'];
+        final statuses = ['running', 'running', 'waiting', 'running', 'success'];
         var count = 0;
 
         Future<Map<String, String>> poll() async {
@@ -1416,11 +1412,10 @@ void main() {
           shouldStop: (r) => r['status'] == 'done',
         );
 
-        var completed = false;
         final sub = stream.listen(
           (_) {},
           onDone: () {
-            completed = true;
+            // Stream completed
           },
         );
 
@@ -1684,7 +1679,6 @@ void main() {
       fakeAsync((async) {
         final manager = ReactivePollingManager(const PollingConfig(
           baseInterval: Duration(milliseconds: 100),
-          enableBatteryOptimization: true,
         ));
 
         Future<Map<String, String>> poll() async {
@@ -1836,7 +1830,6 @@ void main() {
       // Lines 326, 348, 356-357 cover battery factor and null activity fallback
       final manager = ReactivePollingManager(const PollingConfig(
         baseInterval: Duration(milliseconds: 100),
-        enableBatteryOptimization: true,
       ));
 
       // Just verify the manager was created with battery optimization
