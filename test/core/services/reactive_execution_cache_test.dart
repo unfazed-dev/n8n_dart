@@ -189,7 +189,7 @@ void main() {
         await manualCache.get('exec-1');
 
         // Verify entry is cached
-        var size = await manualCache.cacheSize$.first;
+        final size = await manualCache.cacheSize$.first;
         expect(size, equals(1));
 
         // Wait for expiration (TTL is 100ms)
@@ -207,9 +207,7 @@ void main() {
 
         // Collect metrics as operations happen
         final metricsCollected = <CacheMetrics>[];
-        final subscription = cache.metrics$.listen((m) {
-          metricsCollected.add(m);
-        });
+        final subscription = cache.metrics$.listen(metricsCollected.add);
 
         await cache.get('exec-1'); // Miss
         await cache.get('exec-1'); // Hit

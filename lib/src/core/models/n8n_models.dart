@@ -187,7 +187,7 @@ enum WorkflowStatus {
   }
 }
 
-/// Form field type enumeration supporting 15+ field types
+/// Form field type enumeration supporting 18 field types
 enum FormFieldType {
   text,
   email,
@@ -203,7 +203,10 @@ enum FormFieldType {
   url,
   phone,
   slider,
-  switch_;
+  switch_,
+  password,
+  hiddenField,
+  html;
 
   /// Parse field type from string
   static FormFieldType fromString(String type) {
@@ -238,6 +241,13 @@ enum FormFieldType {
         return FormFieldType.slider;
       case 'switch':
         return FormFieldType.switch_;
+      case 'password':
+        return FormFieldType.password;
+      case 'hidden':
+      case 'hiddenfield':
+        return FormFieldType.hiddenField;
+      case 'html':
+        return FormFieldType.html;
       default:
         return FormFieldType.text;
     }
@@ -250,6 +260,8 @@ enum FormFieldType {
         return 'datetime-local';
       case FormFieldType.switch_:
         return 'switch';
+      case FormFieldType.hiddenField:
+        return 'hidden';
       default:
         return name;
     }
@@ -335,6 +347,11 @@ class FormFieldConfig with Validator {
     final errors = <String>[];
     final stringValue = value?.toString();
 
+    // Hidden fields are always valid (no user input required)
+    if (type == FormFieldType.hiddenField) {
+      return ValidationResult.success(stringValue ?? '');
+    }
+
     // Check required
     if (required) {
       final requiredError = Validator.validateRequired(value, label);
@@ -382,6 +399,52 @@ class FormFieldConfig with Validator {
       case FormFieldType.radio:
         if (options != null && !options!.contains(stringValue)) {
           errors.add('$label must be one of: ${options!.join(', ')}');
+        }
+        break;
+
+      case FormFieldType.password:
+        // Check metadata for minimum length requirement
+        if (metadata != null) {
+          final minLength = metadata!['minLength'] as int?;
+          if (minLength != null && stringValue.length < minLength) {
+            errors.add('$label must be at least $minLength characters');
+          }
+          // Check metadata for complexity requirements
+          final requiresUppercase = metadata!['requiresUppercase'] as bool? ?? false;
+          final requiresLowercase = metadata!['requiresLowercase'] as bool? ?? false;
+          final requiresNumber = metadata!['requiresNumber'] as bool? ?? false;
+          final requiresSpecial = metadata!['requiresSpecial'] as bool? ?? false;
+
+          if (requiresUppercase && !stringValue.contains(RegExp(r'[A-Z]'))) {
+            errors.add('$label must contain at least one uppercase letter');
+          }
+          if (requiresLowercase && !stringValue.contains(RegExp(r'[a-z]'))) {
+            errors.add('$label must contain at least one lowercase letter');
+          }
+          if (requiresNumber && !stringValue.contains(RegExp(r'[0-9]'))) {
+            errors.add('$label must contain at least one number');
+          }
+          if (requiresSpecial && !stringValue.contains(RegExp(r'[!@#$%^&*(),.?":{}|<>]'))) {
+            errors.add('$label must contain at least one special character');
+          }
+        }
+        break;
+
+      case FormFieldType.hiddenField:
+        // Hidden fields are always valid (no user input required)
+        break;
+
+      case FormFieldType.html:
+        // Check metadata for sanitization requirement
+        if (metadata != null) {
+          final requiresSanitization = metadata!['requiresSanitization'] as bool? ?? false;
+          if (requiresSanitization) {
+            // Basic HTML tag check - in production, use a proper sanitization library
+            final dangerousTags = RegExp(r'<script|<iframe|<object|<embed|onerror=|onclick=', caseSensitive: false);
+            if (dangerousTags.hasMatch(stringValue)) {
+              errors.add('$label contains potentially unsafe HTML content');
+            }
+          }
         }
         break;
 
