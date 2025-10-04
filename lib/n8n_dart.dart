@@ -80,6 +80,8 @@ export 'src/core/models/n8n_models.dart';
 // Services
 export 'src/core/services/n8n_client.dart';
 export 'src/core/services/polling_manager.dart';
+export 'src/core/services/reactive_error_handler.dart';
+export 'src/core/services/reactive_n8n_client.dart';
 export 'src/core/services/stream_recovery.dart';
 // Workflow Generator
 export 'src/workflow_generator/models/workflow_models.dart';

@@ -18,6 +18,7 @@ class MockN8nHttpClient extends http.BaseClient {
   final Map<String, int> _requestCounts = {};
   final Map<String, List<Function(http.Request)>> _requestCallbacks = {};
   final List<http.Request> _requestHistory = [];
+  final Map<String, Map<String, dynamic> Function()> _dynamicResponses = {};
 
   /// Mock a successful response for a specific path
   void mockResponse(String path, Map<String, dynamic> response,
@@ -43,6 +44,11 @@ class MockN8nHttpClient extends http.BaseClient {
   /// Mock an error response for a specific path
   void mockError(String path, Exception error) {
     _errors[path] = error;
+  }
+
+  /// Mock a dynamic response using a callback function
+  void mockDynamicResponse(String path, Map<String, dynamic> Function() responseGenerator) {
+    _dynamicResponses[path] = responseGenerator;
   }
 
   /// Register a callback to be invoked when a request is made to a path
@@ -73,6 +79,7 @@ class MockN8nHttpClient extends http.BaseClient {
     _requestCounts.clear();
     _requestCallbacks.clear();
     _requestHistory.clear();
+    _dynamicResponses.clear();
   }
 
   /// Mock health check endpoint
@@ -138,6 +145,17 @@ class MockN8nHttpClient extends http.BaseClient {
       throw _errors[path]!;
     }
 
+    // Check for dynamic responses
+    if (_dynamicResponses.containsKey(path)) {
+      final responseData = _dynamicResponses[path]!();
+      return http.StreamedResponse(
+        Stream.value(utf8.encode(json.encode(responseData['body']))),
+        responseData['statusCode'] as int? ?? 200,
+        headers: {'content-type': 'application/json'},
+        request: request,
+      );
+    }
+
     // Check for sequential responses
     if (_sequentialResponses.containsKey(path)) {
       final index = _sequentialIndexes[path]!;
@@ -147,6 +165,15 @@ class MockN8nHttpClient extends http.BaseClient {
         final response = responses[index];
         _sequentialIndexes[path] = index + 1;
 
+        return http.StreamedResponse(
+          Stream.value(utf8.encode(json.encode(response['body']))),
+          response['statusCode'] as int,
+          headers: {'content-type': 'application/json'},
+          request: request,
+        );
+      } else if (responses.isNotEmpty) {
+        // After exhausting sequential responses, keep returning the last one
+        final response = responses.last;
         return http.StreamedResponse(
           Stream.value(utf8.encode(json.encode(response['body']))),
           response['statusCode'] as int,
