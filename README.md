@@ -7,17 +7,31 @@ Production-ready Dart package for **n8n workflow automation** integration. Works
 
 ## ✨ Features
 
+### Core Features
 - ✅ **Pure Dart Core** - No Flutter dependencies in core package
 - ✅ **Type-Safe Models** - Comprehensive validation with `ValidationResult<T>`
-- ✅ **Smart Polling** - 6 polling strategies (minimal, balanced, high-frequency, battery-optimized, etc.)
-- ✅ **Error Handling** - Intelligent retry with exponential backoff and circuit breaker
-- ✅ **Stream Resilience** - 5 recovery strategies for robust stream management
 - ✅ **Dynamic Forms** - 18 form field types for wait node interactions
 - ✅ **Configuration Profiles** - 6 pre-configured profiles for common use cases
 - ✅ **Webhook Support** - Full webhook lifecycle management
 - ✅ **Health Checks** - Connection monitoring and validation
 - ✅ **Workflow Generator** - Programmatically create n8n workflow JSON files
 - ✅ **Pre-built Templates** - Ready-to-use workflow templates (CRUD, Auth, File Upload, etc.)
+
+### Reactive Programming (NEW! 🔥)
+- ✅ **Fully Reactive API** - Stream-based architecture with RxDart
+- ✅ **Reactive State Management** - BehaviorSubjects for automatic state propagation
+- ✅ **Smart Polling** - Auto-stop polling with adaptive intervals
+- ✅ **Error Recovery** - Automatic retry with exponential backoff and circuit breaker
+- ✅ **Stream Composition** - Parallel, sequential, race, and batch operations
+- ✅ **Event-Driven** - PublishSubjects for workflow lifecycle events
+- ✅ **Reactive Queue** - Automatic workflow queue with throttling
+- ✅ **Smart Caching** - TTL-based caching with reactive invalidation
+- ✅ **Live Validation** - Reactive workflow builder with real-time validation
+- ✅ **Performance Metrics** - Real-time monitoring of success rate, latency, etc.
+
+### Both APIs Available
+- ✅ **Legacy Future-based API** - Traditional async/await patterns (still supported)
+- ✅ **Reactive Stream-based API** - Modern reactive programming with RxDart (recommended)
 
 ## 📦 Installation
 
@@ -274,30 +288,319 @@ final formWorkflow = WorkflowTemplates.multiStepForm(
 
 ---
 
+## 🚀 Reactive Programming with RxDart
+
+**NEW!** n8n_dart now includes comprehensive reactive programming support using RxDart!
+
+### ReactiveN8nClient - Stream-Based API
+
+The reactive client provides a fully stream-based API with powerful RxDart operators:
+
+```dart
+import 'package:n8n_dart/n8n_dart.dart';
+
+void main() async {
+  // Create reactive client
+  final client = ReactiveN8nClient(
+    config: N8nConfigProfiles.production(
+      baseUrl: 'https://n8n.example.com',
+      apiKey: 'your-api-key',
+    ),
+  );
+
+  // Start workflow - returns Stream<WorkflowExecution>
+  client.startWorkflow('my-webhook-id', {'action': 'process'}).listen(
+    (execution) => print('Started: ${execution.id}'),
+    onError: (error) => print('Error: $error'),
+  );
+
+  // Auto-polling with smart stop
+  client.pollExecutionStatus(executionId).listen(
+    (execution) {
+      print('Status: ${execution.status}');
+      // Automatically stops when finished!
+    },
+    onDone: () => print('Workflow completed'),
+  );
+
+  // Watch multiple executions in parallel
+  client.watchMultipleExecutions(['exec-1', 'exec-2', 'exec-3']).listen(
+    (executions) {
+      final finished = executions.where((e) => e.isFinished).length;
+      print('Progress: $finished/${executions.length}');
+    },
+  );
+}
+```
+
+### Reactive State Management
+
+All state is managed reactively using BehaviorSubjects:
+
+```dart
+// Subscribe to execution state changes
+client.executionState$.listen((executions) {
+  print('Active executions: ${executions.length}');
+});
+
+// Monitor connection status
+client.connectionState$.listen((state) {
+  if (state == ConnectionState.connected) {
+    print('Connected to n8n server');
+  }
+});
+
+// Track performance metrics
+client.metrics$.listen((metrics) {
+  print('Success rate: ${metrics.successRate * 100}%');
+  print('Avg response time: ${metrics.averageResponseTime.inMilliseconds}ms');
+});
+
+// React to workflow lifecycle events
+client.workflowStarted$.listen((event) {
+  print('Workflow ${event.executionId} started');
+});
+
+client.workflowCompleted$.listen((event) {
+  print('Workflow ${event.executionId} completed: ${event.status}');
+});
+```
+
+### Advanced Reactive Patterns
+
+**Parallel Execution:**
+```dart
+// Start multiple workflows, wait for all to complete
+client.batchStartWorkflows([
+  MapEntry('webhook-1', {'batch': 1}),
+  MapEntry('webhook-2', {'batch': 2}),
+  MapEntry('webhook-3', {'batch': 3}),
+]).listen((allExecutions) {
+  print('All ${allExecutions.length} workflows completed!');
+});
+```
+
+**Sequential Execution:**
+```dart
+// Execute workflows one after another
+client.startWorkflowsSequential(
+  Stream.fromIterable([data1, data2, data3]),
+  'sequential-webhook',
+).listen((execution) {
+  print('Step completed: ${execution.id}');
+});
+```
+
+**Race Condition (Fastest Wins):**
+```dart
+// First workflow to complete wins
+client.raceWorkflows(
+  ['fast-webhook', 'slow-webhook'],
+  {'data': 'test'},
+).listen((winner) {
+  print('Winner: ${winner.id}');
+});
+```
+
+**Throttled Execution (Rate Limiting):**
+```dart
+// Limit execution rate to max 1 per second
+client.startWorkflowsThrottled(
+  dataStream,
+  'rate-limited-webhook',
+  throttleDuration: Duration(seconds: 1),
+).listen((execution) {
+  print('Throttled start: ${execution.id}');
+});
+```
+
+### Reactive Error Handling
+
+Built-in circuit breaker and error recovery:
+
+```dart
+final errorHandler = ReactiveErrorHandler(
+  config: ErrorHandlerConfig.resilient(),
+);
+
+// Listen to categorized errors
+errorHandler.networkErrors$.listen((error) {
+  print('Network error: ${error.message}');
+});
+
+errorHandler.serverErrors$.listen((error) {
+  print('Server error: ${error.message}');
+});
+
+// Monitor circuit breaker state
+errorHandler.circuitState$.listen((state) {
+  if (state == CircuitState.open) {
+    print('Circuit breaker activated - too many errors!');
+  }
+});
+
+// Monitor error rate
+errorHandler.errorRate$.listen((rate) {
+  print('Error rate: ${(rate * 100).toStringAsFixed(1)}%');
+});
+
+// Automatic retry with exponential backoff
+errorHandler.withRetry(
+  client.startWorkflow('flaky-webhook', data),
+).listen(
+  (execution) => print('Success: ${execution.id}'),
+  onError: (error) => print('Failed after retries: $error'),
+);
+```
+
+### Reactive Workflow Queue
+
+Automatic queue management with throttling:
+
+```dart
+final queue = ReactiveWorkflowQueue(
+  client: client,
+  config: QueueConfig.standard(),
+);
+
+// Enqueue workflows
+queue.enqueue('webhook-1', {'priority': 'high'});
+queue.enqueue('webhook-2', {'priority': 'normal'});
+queue.enqueue('webhook-3', {'priority': 'low'});
+
+// Watch queue processing
+queue.processQueue().listen((execution) {
+  print('Processed: ${execution.id}');
+});
+
+// Monitor queue metrics
+queue.metrics$.listen((metrics) {
+  print('Queue size: ${metrics.queueSize}');
+  print('Success rate: ${metrics.successRate}');
+});
+```
+
+### Reactive Execution Cache
+
+Smart caching with TTL and invalidation:
+
+```dart
+final cache = ReactiveExecutionCache(
+  client: client,
+  ttl: Duration(minutes: 5),
+);
+
+// Watch cached execution (auto-refreshes on invalidation)
+cache.watch('execution-123').listen((execution) {
+  if (execution != null) {
+    print('From cache: ${execution.status}');
+  } else {
+    print('Cache miss - fetching...');
+  }
+});
+
+// Invalidate cache entries
+cache.invalidate('execution-123');
+cache.invalidatePattern((id) => id.startsWith('webhook-'));
+
+// Monitor cache performance
+cache.metrics$.listen((metrics) {
+  print('Hit rate: ${metrics.hitRate}');
+});
+```
+
+### Reactive Workflow Builder
+
+Build workflows with live validation:
+
+```dart
+final builder = ReactiveWorkflowBuilder.create('My API Workflow');
+
+// Watch validation state
+builder.isValid$.listen((isValid) {
+  print('Workflow ${isValid ? "valid" : "invalid"}');
+});
+
+builder.validationErrors$.listen((errors) {
+  for (final error in errors) {
+    print('Error: $error');
+  }
+});
+
+// Build reactively
+builder.webhookTrigger(path: 'api/v1/process');
+builder.setNode(name: 'Process Data', type: 'function');
+builder.respondToWebhook();
+builder.connect('Webhook', 'Process Data');
+
+// Watch the built workflow
+builder.workflow$.listen((workflow) {
+  print('Workflow updated: ${workflow.nodes.length} nodes');
+});
+```
+
+### Migration from Future-based to Reactive
+
+Both APIs coexist! You can migrate gradually:
+
+```dart
+// Legacy Future-based API (still supported)
+final client = N8nClient(config: config);
+final executionId = await client.startWorkflow('webhook', data);
+
+// New Reactive API (recommended)
+final reactiveClient = ReactiveN8nClient(config: config);
+reactiveClient.startWorkflow('webhook', data).listen((execution) {
+  print('Execution: ${execution.id}');
+});
+
+// Convert stream to future when needed
+final execution = await reactiveClient.startWorkflow('webhook', data).first;
+```
+
+**Learn More:**
+- 📖 [RxDart Migration Guide](docs/RXDART_MIGRATION_GUIDE.md)
+- 🎯 [RxDart Patterns Guide](docs/RXDART_PATTERNS_GUIDE.md)
+- 🔧 [Troubleshooting Guide](docs/RXDART_TROUBLESHOOTING.md)
+- 💡 [Reactive Examples](example/reactive/)
+
+---
+
 ## 🔧 Advanced Features
 
 ### Smart Polling
 
-The package includes a smart polling manager with multiple strategies:
+The package includes both legacy and reactive polling:
 
+**Legacy (Future-based):**
 ```dart
 final pollingManager = SmartPollingManager(PollingConfig.balanced());
 
 pollingManager.startPolling(executionId, () async {
   final execution = await client.getExecutionStatus(executionId);
-
-  // Record activity for adaptive polling
   pollingManager.recordActivity(executionId, execution.status.toString());
 
-  // Stop polling when finished
   if (execution.isFinished) {
     pollingManager.stopPolling(executionId);
   }
 });
+```
 
-// Get metrics
-final metrics = pollingManager.getMetrics(executionId);
-print('Polling efficiency: ${metrics?.successRate}');
+**Reactive (Stream-based - Recommended):**
+```dart
+final reactivePolling = ReactivePollingManager(
+  config: PollingConfig.balanced(),
+);
+
+reactivePolling.startPolling(executionId, pollFunction).listen(
+  (execution) => print('Status: ${execution.status}'),
+  onDone: () => print('Polling complete'),
+);
+
+// Watch polling metrics
+reactivePolling.pollingMetrics$.listen((metrics) {
+  print('Success rate: ${metrics.successRate}');
+});
 ```
 
 ### Error Handling with Retry
@@ -385,17 +688,98 @@ class N8nFlutterService {
 
 ## 📚 API Reference
 
-### N8nClient
+### Legacy N8nClient (Future-based)
 
-| Method | Description |
-|--------|-------------|
-| `startWorkflow(webhookId, data)` | Start a workflow execution |
-| `getExecutionStatus(executionId)` | Get current execution status |
-| `resumeWorkflow(executionId, input)` | Resume paused workflow with input |
-| `cancelWorkflow(executionId)` | Cancel running execution |
-| `validateWebhook(webhookId)` | Validate webhook exists |
-| `testConnection()` | Test server connectivity |
-| `dispose()` | Clean up resources |
+| Method | Return Type | Description |
+|--------|-------------|-------------|
+| `startWorkflow(webhookId, data)` | `Future<String>` | Start a workflow execution |
+| `getExecutionStatus(executionId)` | `Future<WorkflowExecution>` | Get current execution status |
+| `resumeWorkflow(executionId, input)` | `Future<void>` | Resume paused workflow with input |
+| `cancelWorkflow(executionId)` | `Future<void>` | Cancel running execution |
+| `validateWebhook(webhookId)` | `Future<bool>` | Validate webhook exists |
+| `testConnection()` | `Future<bool>` | Test server connectivity |
+| `dispose()` | `void` | Clean up resources |
+
+### ReactiveN8nClient (Stream-based - Recommended)
+
+| Method | Return Type | Description |
+|--------|-------------|-------------|
+| `startWorkflow(webhookId, data)` | `Stream<WorkflowExecution>` | Start a workflow execution |
+| `pollExecutionStatus(executionId)` | `Stream<WorkflowExecution>` | Poll status with auto-stop |
+| `watchExecution(executionId)` | `Stream<WorkflowExecution>` | Watch with automatic retry |
+| `watchMultipleExecutions(ids)` | `Stream<List<WorkflowExecution>>` | Watch multiple in parallel |
+| `batchStartWorkflows(workflows)` | `Stream<List<WorkflowExecution>>` | Start all, wait for all |
+| `startWorkflowsSequential(dataStream)` | `Stream<WorkflowExecution>` | Execute sequentially |
+| `raceWorkflows(webhookIds, data)` | `Stream<WorkflowExecution>` | First to complete wins |
+| `startWorkflowsThrottled(dataStream)` | `Stream<WorkflowExecution>` | Rate-limited execution |
+| `zipWorkflows(webhookIds, data)` | `Stream<List<WorkflowExecution>>` | Combine results |
+| `resumeWorkflow(executionId, input)` | `Stream<bool>` | Resume with confirmation |
+| `cancelWorkflow(executionId)` | `Stream<bool>` | Cancel with confirmation |
+| `dispose()` | `void` | Clean up resources |
+
+**Reactive State Streams:**
+- `executionState$` - `Stream<Map<String, WorkflowExecution>>` - Current executions
+- `config$` - `Stream<N8nServiceConfig>` - Current configuration
+- `connectionState$` - `Stream<ConnectionState>` - Connection status
+- `metrics$` - `Stream<PerformanceMetrics>` - Performance metrics
+- `workflowEvents$` - `Stream<WorkflowEvent>` - All lifecycle events
+- `workflowStarted$` - `Stream<WorkflowStartedEvent>` - Started events only
+- `workflowCompleted$` - `Stream<WorkflowCompletedEvent>` - Completed events only
+- `workflowErrors$` - `Stream<WorkflowErrorEvent>` - Error events only
+- `errors$` - `Stream<N8nException>` - All errors
+
+### ReactiveErrorHandler
+
+| Method/Property | Return Type | Description |
+|-----------------|-------------|-------------|
+| `handleError(error)` | `void` | Report an error |
+| `withRetry<T>(stream)` | `Stream<T>` | Wrap stream with retry |
+| `errors$` | `Stream<N8nException>` | All errors |
+| `networkErrors$` | `Stream<N8nException>` | Network errors only |
+| `serverErrors$` | `Stream<N8nException>` | Server errors only |
+| `timeoutErrors$` | `Stream<N8nException>` | Timeout errors only |
+| `authErrors$` | `Stream<N8nException>` | Auth errors only |
+| `workflowErrors$` | `Stream<N8nException>` | Workflow errors only |
+| `errorRate$` | `Stream<double>` | Error rate over time |
+| `circuitState$` | `Stream<CircuitState>` | Circuit breaker state |
+| `dispose()` | `void` | Clean up resources |
+
+### ReactiveWorkflowQueue
+
+| Method/Property | Return Type | Description |
+|-----------------|-------------|-------------|
+| `enqueue(webhookId, data)` | `void` | Add workflow to queue |
+| `processQueue()` | `Stream<WorkflowExecution>` | Process queue items |
+| `queue$` | `Stream<List<QueuedWorkflow>>` | Current queue state |
+| `queueLength$` | `Stream<int>` | Queue size |
+| `events$` | `Stream<QueueEvent>` | Queue events |
+| `metrics$` | `Stream<QueueMetrics>` | Queue metrics |
+| `dispose()` | `void` | Clean up resources |
+
+### ReactiveExecutionCache
+
+| Method/Property | Return Type | Description |
+|-----------------|-------------|-------------|
+| `watch(executionId)` | `Stream<WorkflowExecution?>` | Watch cached execution |
+| `invalidate(executionId)` | `void` | Invalidate cache entry |
+| `invalidateAll()` | `void` | Clear all cache |
+| `invalidatePattern(matcher)` | `void` | Invalidate by pattern |
+| `cache$` | `Stream<Map<String, CachedExecution>>` | Cache state |
+| `metrics$` | `Stream<CacheMetrics>` | Cache metrics |
+| `dispose()` | `void` | Clean up resources |
+
+### ReactiveWorkflowBuilder
+
+| Method/Property | Return Type | Description |
+|-----------------|-------------|-------------|
+| `webhookTrigger(...)` | `void` | Add webhook trigger |
+| `setNode(...)` | `void` | Add/update node |
+| `connect(from, to)` | `void` | Connect nodes |
+| `nodes$` | `Stream<List<WorkflowNode>>` | Current nodes |
+| `validationErrors$` | `Stream<List<String>>` | Validation errors |
+| `isValid$` | `Stream<bool>` | Validation state |
+| `workflow$` | `Stream<Workflow>` | Built workflow |
+| `dispose()` | `void` | Clean up resources |
 
 ### Models
 
@@ -404,6 +788,9 @@ class N8nFlutterService {
 - `WaitNodeData` - Wait node configuration and fields
 - `FormFieldConfig` - Dynamic form field definition
 - `ValidationResult<T>` - Type-safe validation results
+- `PerformanceMetrics` - Performance statistics
+- `CircuitState` - Circuit breaker state (open, halfOpen, closed)
+- `ConnectionState` - Connection status (disconnected, connecting, connected, error)
 
 ### Configuration
 
@@ -414,6 +801,8 @@ class N8nFlutterService {
 - `PollingConfig` - Polling strategies
 - `RetryConfig` - Retry and circuit breaker
 - `WebhookConfig` - Webhook timeouts and validation
+- `ErrorHandlerConfig` - Error handler configuration
+- `QueueConfig` - Queue configuration
 
 ## 🧪 Testing
 
