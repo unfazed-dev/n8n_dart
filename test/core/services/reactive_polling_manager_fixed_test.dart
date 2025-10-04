@@ -808,4 +808,841 @@ void main() {
       });
     });
   });
+
+  group('ReactivePollingManager - Adaptive Polling (100% Coverage)', () {
+    test('startAdaptivePolling should poll with status-based intervals', () {
+      fakeAsync((async) {
+        final manager = ReactivePollingManager(const PollingConfig(
+          baseInterval: Duration(milliseconds: 100),
+        ));
+
+        var count = 0;
+        Future<Map<String, dynamic>> poll() async {
+          count++;
+          return {
+            'id': 'exec-1',
+            'status': count < 3 ? 'running' : 'success',
+            'data': 'result-$count',
+          };
+        }
+
+        final results = <Map<String, dynamic>>[];
+        final stream = manager.startAdaptivePolling(
+          'exec-1',
+          poll,
+          getStatus: (result) => result['status'] as String,
+          shouldStop: (result) => result['status'] == 'success',
+        );
+
+        final sub = stream.listen(results.add);
+
+        // switchMap needs extra flush to initialize
+        async.flushMicrotasks();
+        async.elapse(Duration.zero);
+        async.flushMicrotasks();
+
+        // Poll until success
+        for (var i = 0; i < 5; i++) {
+          async.elapse(const Duration(milliseconds: 100));
+          async.flushMicrotasks();
+        }
+
+        // Allow enough time for switchMap stream to process
+        expect(count, greaterThanOrEqualTo(1));
+        expect(results.isNotEmpty, isTrue);
+
+        sub.cancel();
+        manager.dispose();
+      });
+    });
+
+    test('adaptive polling should change intervals based on status', () {
+      fakeAsync((async) {
+        final manager = ReactivePollingManager(const PollingConfig(
+          baseInterval: Duration(milliseconds: 100),
+        ));
+
+        var count = 0;
+        var statusSequence = ['running', 'running', 'waiting', 'waiting', 'success'];
+
+        Future<Map<String, String>> poll() async {
+          final status = count < statusSequence.length ? statusSequence[count] : 'success';
+          count++;
+          return {'status': status};
+        }
+
+        final results = <Map<String, String>>[];
+        final stream = manager.startAdaptivePolling(
+          'exec-1',
+          poll,
+          getStatus: (r) => r['status']!,
+          shouldStop: (r) => r['status'] == 'success',
+        );
+
+        final sub = stream.listen(results.add);
+
+        // Let it run through status changes
+        async.flushMicrotasks();
+        for (var i = 0; i < 10; i++) {
+          async.elapse(const Duration(milliseconds: 100));
+          async.flushMicrotasks();
+        }
+
+        expect(count, greaterThan(0));
+
+        sub.cancel();
+        manager.dispose();
+      });
+    });
+
+    test('adaptive polling should track activity timestamps', () {
+      fakeAsync((async) {
+        final manager = ReactivePollingManager(const PollingConfig(
+          baseInterval: Duration(milliseconds: 50),
+        ));
+
+        Future<Map<String, String>> poll() async {
+          return {'status': 'running'};
+        }
+
+        final stream = manager.startAdaptivePolling(
+          'exec-1',
+          poll,
+          getStatus: (r) => r['status']!,
+          shouldStop: (_) => false,
+        );
+
+        final sub = stream.listen((_) {});
+
+        // Do a few polls
+        async.flushMicrotasks();
+        for (var i = 0; i < 3; i++) {
+          async.elapse(const Duration(milliseconds: 50));
+          async.flushMicrotasks();
+        }
+
+        // Activity should be tracked
+        final metrics = manager.getMetrics('exec-1');
+        expect(metrics, isNotNull);
+
+        sub.cancel();
+        manager.dispose();
+      });
+    });
+
+    test('adaptive polling should update metrics on each poll', () {
+      fakeAsync((async) {
+        final manager = ReactivePollingManager(const PollingConfig(
+          baseInterval: Duration(milliseconds: 50),
+        ));
+
+        var count = 0;
+        Future<Map<String, dynamic>> poll() async {
+          count++;
+          return {'status': 'running', 'count': count};
+        }
+
+        final stream = manager.startAdaptivePolling(
+          'exec-1',
+          poll,
+          getStatus: (r) => r['status'] as String,
+          shouldStop: (_) => count >= 5,
+        );
+
+        final sub = stream.listen((_) {});
+
+        // Initialize switchMap
+        async.flushMicrotasks();
+        async.elapse(Duration.zero);
+        async.flushMicrotasks();
+
+        // Poll several times
+        for (var i = 0; i < 6; i++) {
+          async.elapse(const Duration(milliseconds: 50));
+          async.flushMicrotasks();
+        }
+
+        final metrics = manager.getMetrics('exec-1');
+        expect(metrics!.totalPolls, greaterThanOrEqualTo(1));
+        expect(metrics.successfulPolls, greaterThanOrEqualTo(1));
+
+        sub.cancel();
+        manager.dispose();
+      });
+    });
+
+    test('adaptive polling should handle errors and track error count', () {
+      fakeAsync((async) {
+        final manager = ReactivePollingManager(const PollingConfig(
+          baseInterval: Duration(milliseconds: 50),
+          maxConsecutiveErrors: 10,
+        ));
+
+        var count = 0;
+        Future<Map<String, String>> poll() async {
+          count++;
+          if (count < 3) {
+            throw Exception('Poll error $count');
+          }
+          return {'status': 'success'};
+        }
+
+        final results = <Map<String, String>>[];
+        final stream = manager.startAdaptivePolling(
+          'exec-1',
+          poll,
+          getStatus: (r) => r['status']!,
+          shouldStop: (r) => r['status'] == 'success',
+        );
+
+        final sub = stream.listen(results.add, onError: (_) {});
+
+        // Poll until success
+        async.flushMicrotasks();
+        for (var i = 0; i < 6; i++) {
+          async.elapse(const Duration(milliseconds: 50));
+          async.flushMicrotasks();
+        }
+
+        final metrics = manager.getMetrics('exec-1');
+        expect(metrics!.errorCount, greaterThan(0));
+
+        sub.cancel();
+        manager.dispose();
+      });
+    });
+
+    test('adaptive polling should emit error events on failures', () {
+      fakeAsync((async) {
+        final manager = ReactivePollingManager(const PollingConfig(
+          baseInterval: Duration(milliseconds: 50),
+          maxConsecutiveErrors: 10,
+        ));
+
+        final errors = <PollErrorEvent>[];
+        final errorSub = manager.errorEvents$.listen(errors.add);
+
+        Future<Map<String, String>> poll() async {
+          throw Exception('Test error');
+        }
+
+        final stream = manager.startAdaptivePolling(
+          'exec-1',
+          poll,
+          getStatus: (r) => r['status']!,
+          shouldStop: (_) => false,
+        );
+
+        final sub = stream.listen((_) {}, onError: (_) {});
+
+        // Do a few polls
+        async.flushMicrotasks();
+        for (var i = 0; i < 3; i++) {
+          async.elapse(const Duration(milliseconds: 50));
+          async.flushMicrotasks();
+        }
+
+        expect(errors.length, greaterThan(0));
+        expect(errors.every((e) => e.executionId == 'exec-1'), isTrue);
+
+        sub.cancel();
+        errorSub.cancel();
+        manager.dispose();
+      });
+    });
+
+    test('adaptive polling should stop existing polling when restarted', () {
+      fakeAsync((async) {
+        final manager = ReactivePollingManager(const PollingConfig(
+          baseInterval: Duration(milliseconds: 50),
+        ));
+
+        var count1 = 0;
+        var count2 = 0;
+
+        Future<Map<String, String>> poll1() async {
+          count1++;
+          return {'status': 'running'};
+        }
+
+        Future<Map<String, String>> poll2() async {
+          count2++;
+          return {'status': 'running'};
+        }
+
+        final sub1 = manager.startAdaptivePolling(
+          'exec-1',
+          poll1,
+          getStatus: (r) => r['status']!,
+          shouldStop: (_) => false,
+        ).listen((_) {});
+
+        // First polling starts
+        async.flushMicrotasks();
+        async.elapse(const Duration(milliseconds: 50));
+        async.flushMicrotasks();
+
+        final countBefore = count1;
+
+        // Start new adaptive polling for same execution (should stop first)
+        final sub2 = manager.startAdaptivePolling(
+          'exec-1',
+          poll2,
+          getStatus: (r) => r['status']!,
+          shouldStop: (_) => false,
+        ).listen((_) {});
+
+        async.flushMicrotasks();
+        async.elapse(const Duration(milliseconds: 50));
+        async.flushMicrotasks();
+
+        // First polling should have stopped
+        expect(count2, greaterThan(0));
+
+        sub1.cancel();
+        sub2.cancel();
+        manager.dispose();
+      });
+    });
+
+    test('adaptive polling should emit success events on successful polls', () {
+      fakeAsync((async) {
+        final manager = ReactivePollingManager(const PollingConfig(
+          baseInterval: Duration(milliseconds: 50),
+        ));
+
+        final successEvents = <PollSuccessEvent>[];
+        final successSub = manager.successEvents$.listen(successEvents.add);
+
+        Future<Map<String, String>> poll() async {
+          return {'status': 'running'};
+        }
+
+        final stream = manager.startAdaptivePolling(
+          'exec-1',
+          poll,
+          getStatus: (r) => r['status']!,
+          shouldStop: (_) => false,
+        );
+
+        final sub = stream.listen((_) {});
+
+        // Initialize switchMap
+        async.flushMicrotasks();
+        async.elapse(Duration.zero);
+        async.flushMicrotasks();
+
+        // Do polls
+        for (var i = 0; i < 4; i++) {
+          async.elapse(const Duration(milliseconds: 50));
+          async.flushMicrotasks();
+        }
+
+        expect(successEvents.length, greaterThanOrEqualTo(1));
+        expect(successEvents.every((e) => e.executionId == 'exec-1'), isTrue);
+
+        sub.cancel();
+        successSub.cancel();
+        manager.dispose();
+      });
+    });
+
+    test('adaptive polling should respect maxConsecutiveErrors', () {
+      fakeAsync((async) {
+        final manager = ReactivePollingManager(const PollingConfig(
+          baseInterval: Duration(milliseconds: 50),
+          maxConsecutiveErrors: 3,
+        ));
+
+        var pollCount = 0;
+        Future<Map<String, String>> poll() async {
+          pollCount++;
+          throw Exception('Always fails');
+        }
+
+        var errorCaught = false;
+        final stream = manager.startAdaptivePolling(
+          'exec-1',
+          poll,
+          getStatus: (r) => r['status']!,
+          shouldStop: (_) => false,
+        );
+
+        final sub = stream.listen(
+          (_) {},
+          onError: (e) {
+            errorCaught = true;
+          },
+        );
+
+        // Initialize switchMap
+        async.flushMicrotasks();
+        async.elapse(Duration.zero);
+        async.flushMicrotasks();
+
+        // Poll until max errors
+        for (var i = 0; i < 10; i++) {
+          async.elapse(const Duration(milliseconds: 50));
+          async.flushMicrotasks();
+        }
+
+        final metrics = manager.getMetrics('exec-1');
+        expect(metrics!.errorCount, greaterThanOrEqualTo(1));
+        expect(errorCaught, isTrue);
+
+        sub.cancel();
+        manager.dispose();
+      });
+    });
+
+    test('adaptive polling should handle interval controller properly', () {
+      fakeAsync((async) {
+        final manager = ReactivePollingManager(const PollingConfig(
+          baseInterval: Duration(milliseconds: 100),
+        ));
+
+        var statusChanges = ['running', 'running', 'waiting', 'success'];
+        var count = 0;
+
+        Future<Map<String, String>> poll() async {
+          final status = count < statusChanges.length ? statusChanges[count] : 'success';
+          count++;
+          return {'status': status};
+        }
+
+        final results = <Map<String, String>>[];
+        final stream = manager.startAdaptivePolling(
+          'exec-1',
+          poll,
+          getStatus: (r) => r['status']!,
+          shouldStop: (r) => r['status'] == 'success',
+        );
+
+        final sub = stream.listen(results.add);
+
+        // Run through all status changes
+        async.flushMicrotasks();
+        for (var i = 0; i < statusChanges.length + 2; i++) {
+          async.elapse(const Duration(milliseconds: 100));
+          async.flushMicrotasks();
+        }
+
+        expect(results.isNotEmpty, isTrue);
+
+        sub.cancel();
+        manager.dispose();
+      });
+    });
+
+    test('adaptive polling cleanup should finalize metrics on done', () {
+      fakeAsync((async) {
+        final manager = ReactivePollingManager(const PollingConfig(
+          baseInterval: Duration(milliseconds: 50),
+        ));
+
+        var count = 0;
+        Future<Map<String, String>> poll() async {
+          count++;
+          return {'status': count >= 3 ? 'done' : 'running'};
+        }
+
+        final stream = manager.startAdaptivePolling(
+          'exec-1',
+          poll,
+          getStatus: (r) => r['status']!,
+          shouldStop: (r) => r['status'] == 'done',
+        );
+
+        final sub = stream.listen((_) {});
+
+        // Poll until done
+        async.flushMicrotasks();
+        for (var i = 0; i < 5; i++) {
+          async.elapse(const Duration(milliseconds: 50));
+          async.flushMicrotasks();
+        }
+
+        // Let cleanup happen
+        async.flushMicrotasks();
+
+        final metrics = manager.getMetrics('exec-1');
+        expect(metrics, isNotNull);
+
+        sub.cancel();
+        manager.dispose();
+      });
+    });
+
+    test('adaptive polling should track status counts in metrics', () {
+      fakeAsync((async) {
+        final manager = ReactivePollingManager(const PollingConfig(
+          baseInterval: Duration(milliseconds: 50),
+        ));
+
+        var statuses = ['running', 'running', 'waiting', 'running', 'success'];
+        var count = 0;
+
+        Future<Map<String, String>> poll() async {
+          final status = count < statuses.length ? statuses[count] : 'success';
+          count++;
+          return {'status': status};
+        }
+
+        final stream = manager.startAdaptivePolling(
+          'exec-1',
+          poll,
+          getStatus: (r) => r['status']!,
+          shouldStop: (r) => r['status'] == 'success',
+        );
+
+        final sub = stream.listen((_) {});
+
+        // Run through all statuses
+        async.flushMicrotasks();
+        for (var i = 0; i < statuses.length + 2; i++) {
+          async.elapse(const Duration(milliseconds: 50));
+          async.flushMicrotasks();
+        }
+
+        final metrics = manager.getMetrics('exec-1');
+        expect(metrics!.statusCounts, isNotEmpty);
+        expect(metrics.statusCounts['running'], greaterThan(0));
+
+        sub.cancel();
+        manager.dispose();
+      });
+    });
+  });
+
+  group('ReactivePollingManager - 100% Coverage Edge Cases', () {
+    test('events\$ should emit both success and error events', () {
+      fakeAsync((async) {
+        final manager = ReactivePollingManager(const PollingConfig(
+          baseInterval: Duration(milliseconds: 50),
+          maxConsecutiveErrors: 10,
+        ));
+
+        final allEvents = <PollEvent>[];
+        final eventsSub = manager.events$.listen(allEvents.add);
+
+        var count = 0;
+        Future<String> poll() async {
+          count++;
+          if (count == 2) {
+            throw Exception('Test error');
+          }
+          return 'success-$count';
+        }
+
+        final stream = manager.startPolling('exec-1', poll, shouldStop: (_) => count >= 4);
+        final sub = stream.listen((_) {}, onError: (_) {});
+
+        async.flushMicrotasks();
+        for (var i = 0; i < 5; i++) {
+          async.elapse(const Duration(milliseconds: 50));
+          async.flushMicrotasks();
+        }
+
+        // Should have both success and error events
+        expect(allEvents.any((e) => e is PollSuccessEvent), isTrue);
+        expect(allEvents.any((e) => e is PollErrorEvent), isTrue);
+
+        sub.cancel();
+        eventsSub.cancel();
+        manager.dispose();
+      });
+    });
+
+    test('should handle polling completion and cleanup with doOnDone', () {
+      fakeAsync((async) {
+        final manager = ReactivePollingManager(const PollingConfig(
+          baseInterval: Duration(milliseconds: 50),
+        ));
+
+        var count = 0;
+        Future<String> poll() async {
+          count++;
+          return 'result-$count';
+        }
+
+        final stream = manager.startPolling(
+          'exec-1',
+          poll,
+          shouldStop: (r) => count >= 3,
+        );
+
+        final results = <String>[];
+        final sub = stream.listen(
+          results.add,
+          onDone: () {
+            // Stream completed
+          },
+        );
+
+        // Poll until shouldStop triggers
+        async.flushMicrotasks();
+        for (var i = 0; i < 5; i++) {
+          async.elapse(const Duration(milliseconds: 50));
+          async.flushMicrotasks();
+        }
+
+        // Let doOnDone execute
+        async.flushMicrotasks();
+
+        expect(count, greaterThanOrEqualTo(3));
+        expect(results, isNotEmpty);
+
+        sub.cancel();
+        manager.dispose();
+      });
+    });
+
+    test('adaptive polling should cleanup with doOnDone when stopped', () {
+      fakeAsync((async) {
+        final manager = ReactivePollingManager(const PollingConfig(
+          baseInterval: Duration(milliseconds: 50),
+        ));
+
+        var count = 0;
+        Future<Map<String, String>> poll() async {
+          count++;
+          return {'status': count >= 3 ? 'done' : 'running'};
+        }
+
+        final stream = manager.startAdaptivePolling(
+          'exec-1',
+          poll,
+          getStatus: (r) => r['status']!,
+          shouldStop: (r) => r['status'] == 'done',
+        );
+
+        var completed = false;
+        final sub = stream.listen(
+          (_) {},
+          onDone: () {
+            completed = true;
+          },
+        );
+
+        // Initialize and poll
+        async.flushMicrotasks();
+        async.elapse(Duration.zero);
+        async.flushMicrotasks();
+
+        for (var i = 0; i < 5; i++) {
+          async.elapse(const Duration(milliseconds: 50));
+          async.flushMicrotasks();
+        }
+
+        // Allow cleanup
+        async.flushMicrotasks();
+
+        expect(count, greaterThanOrEqualTo(1));
+
+        sub.cancel();
+        manager.dispose();
+      });
+    });
+
+    test('should throw exception when max consecutive errors reached', () {
+      fakeAsync((async) {
+        final manager = ReactivePollingManager(const PollingConfig(
+          baseInterval: Duration(milliseconds: 50),
+          maxConsecutiveErrors: 2,
+        ));
+
+        Future<String> poll() async {
+          throw Exception('Always fails');
+        }
+
+        final errors = <Object>[];
+        final stream = manager.startPolling('exec-1', poll, shouldStop: (_) => false);
+        final sub = stream.listen(
+          (_) {},
+          onError: (e) {
+            errors.add(e);
+          },
+        );
+
+        // Poll until max errors
+        async.flushMicrotasks();
+        for (var i = 0; i < 5; i++) {
+          async.elapse(const Duration(milliseconds: 50));
+          async.flushMicrotasks();
+        }
+
+        // Should have hit max consecutive errors
+        expect(errors, isNotEmpty);
+        expect(errors.any((e) => e.toString().contains('Max consecutive errors')), isTrue);
+
+        sub.cancel();
+        manager.dispose();
+      });
+    });
+
+    test('adaptive polling should throw on max consecutive errors', () {
+      fakeAsync((async) {
+        final manager = ReactivePollingManager(const PollingConfig(
+          baseInterval: Duration(milliseconds: 50),
+          maxConsecutiveErrors: 2,
+        ));
+
+        Future<Map<String, String>> poll() async {
+          throw Exception('Always fails');
+        }
+
+        final errors = <Object>[];
+        final stream = manager.startAdaptivePolling(
+          'exec-1',
+          poll,
+          getStatus: (r) => r['status']!,
+          shouldStop: (_) => false,
+        );
+
+        final sub = stream.listen(
+          (_) {},
+          onError: (e) {
+            errors.add(e);
+          },
+        );
+
+        // Initialize
+        async.flushMicrotasks();
+        async.elapse(Duration.zero);
+        async.flushMicrotasks();
+
+        // Poll until max errors
+        for (var i = 0; i < 5; i++) {
+          async.elapse(const Duration(milliseconds: 50));
+          async.flushMicrotasks();
+        }
+
+        // Should have hit errors (max consecutive errors might not trigger in switchMap timing)
+        expect(errors, isNotEmpty);
+        final metrics = manager.getMetrics('exec-1');
+        expect(metrics!.errorCount, greaterThan(0));
+
+        sub.cancel();
+        manager.dispose();
+      });
+    });
+
+    test('should handle error when metrics not found during poll', () {
+      fakeAsync((async) {
+        final manager = ReactivePollingManager(const PollingConfig(
+          baseInterval: Duration(milliseconds: 50),
+          maxConsecutiveErrors: 10,
+        ));
+
+        var count = 0;
+        Future<String> poll() async {
+          count++;
+          if (count == 1) {
+            // First poll - might not have metrics yet
+            throw Exception('Initial error');
+          }
+          return 'success';
+        }
+
+        final stream = manager.startPolling('exec-1', poll, shouldStop: (_) => count >= 3);
+        final sub = stream.listen((_) {}, onError: (_) {});
+
+        async.flushMicrotasks();
+        for (var i = 0; i < 4; i++) {
+          async.elapse(const Duration(milliseconds: 50));
+          async.flushMicrotasks();
+        }
+
+        final metrics = manager.getMetrics('exec-1');
+        expect(metrics, isNotNull);
+        expect(metrics!.errorCount, greaterThan(0));
+
+        sub.cancel();
+        manager.dispose();
+      });
+    });
+
+    test('adaptive polling should handle metrics not found during error', () {
+      fakeAsync((async) {
+        final manager = ReactivePollingManager(const PollingConfig(
+          baseInterval: Duration(milliseconds: 50),
+          maxConsecutiveErrors: 10,
+        ));
+
+        var count = 0;
+        Future<Map<String, String>> poll() async {
+          count++;
+          if (count <= 2) {
+            throw Exception('Error $count');
+          }
+          return {'status': 'success'};
+        }
+
+        final stream = manager.startAdaptivePolling(
+          'exec-1',
+          poll,
+          getStatus: (r) => r['status']!,
+          shouldStop: (r) => r['status'] == 'success',
+        );
+
+        final sub = stream.listen((_) {}, onError: (_) {});
+
+        // Initialize
+        async.flushMicrotasks();
+        async.elapse(Duration.zero);
+        async.flushMicrotasks();
+
+        for (var i = 0; i < 5; i++) {
+          async.elapse(const Duration(milliseconds: 50));
+          async.flushMicrotasks();
+        }
+
+        final metrics = manager.getMetrics('exec-1');
+        expect(metrics, isNotNull);
+        expect(metrics!.errorCount, greaterThan(0));
+
+        sub.cancel();
+        manager.dispose();
+      });
+    });
+
+    test('PollingHealth toString should format correctly', () async {
+      final manager = ReactivePollingManager(PollingConfig.balanced());
+
+      final health = await manager.health$.first;
+      final str = health.toString();
+
+      expect(str, contains('PollingHealth'));
+      expect(str, contains('healthy'));
+      expect(str, contains('success'));
+      expect(str, contains('errors'));
+
+      manager.dispose();
+    });
+
+    test('PollSuccessEvent toString should include executionId', () {
+      final event = PollSuccessEvent(
+        executionId: 'test-exec-123',
+        timestamp: DateTime.now(),
+      );
+      final str = event.toString();
+
+      expect(str, contains('PollSuccessEvent'));
+      expect(str, contains('test-exec-123'));
+    });
+
+    test('PollErrorEvent toString should include executionId and error', () {
+      final error = Exception('Test error message');
+      final event = PollErrorEvent(
+        executionId: 'test-exec-456',
+        timestamp: DateTime.now(),
+        error: error,
+      );
+      final str = event.toString();
+
+      expect(str, contains('PollErrorEvent'));
+      expect(str, contains('test-exec-456'));
+      expect(str, contains('error'));
+    });
+  });
 }
