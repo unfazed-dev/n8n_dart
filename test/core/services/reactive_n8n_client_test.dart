@@ -1511,5 +1511,479 @@ void main() {
         expect(true, isTrue);
       });
     });
+
+    group('Phase 3 - Advanced Operations', () {
+      group('startWorkflowsSequential()', () {
+        test('should execute workflows one at a time using concatMap', () async {
+          final executionOrder = <String>[];
+
+          // Mock workflow responses
+          mockHttp.onRequest('/api/start-workflow/webhook-1', () {
+            executionOrder.add('start-1');
+            return {
+              'id': 'exec-1',
+              'workflowId': 'workflow-1',
+              'status': 'running',
+              'startedAt': DateTime.now().toIso8601String(),
+            };
+          });
+
+          mockHttp.onRequest('/api/start-workflow/webhook-2', () {
+            executionOrder.add('start-2');
+            return {
+              'id': 'exec-2',
+              'workflowId': 'workflow-2',
+              'status': 'running',
+              'startedAt': DateTime.now().toIso8601String(),
+            };
+          });
+
+          // Mock execution status - immediate completion
+          mockHttp.mockResponse('/api/execution/exec-1', {
+            'id': 'exec-1',
+            'workflowId': 'workflow-1',
+            'status': 'success',
+            'startedAt': DateTime.now().toIso8601String(),
+            'finishedAt': DateTime.now().toIso8601String(),
+          });
+
+          mockHttp.mockResponse('/api/execution/exec-2', {
+            'id': 'exec-2',
+            'workflowId': 'workflow-2',
+            'status': 'success',
+            'startedAt': DateTime.now().toIso8601String(),
+            'finishedAt': DateTime.now().toIso8601String(),
+          });
+
+          // Create input stream
+          final inputStream = Stream.fromIterable([
+            const MapEntry('webhook-1', {'data': '1'}),
+            const MapEntry('webhook-2', {'data': '2'}),
+          ]);
+
+          final stream = client.startWorkflowsSequential(inputStream);
+          final results = await stream.toList();
+
+          // Should have 2 results
+          expect(results, hasLength(2));
+          expect(results[0].id, equals('exec-1'));
+          expect(results[1].id, equals('exec-2'));
+
+          // Should have executed in sequence
+          expect(executionOrder, equals(['start-1', 'start-2']));
+        });
+
+        test('should maintain order of executions', () async {
+          // Mock responses with delays to test ordering
+          mockHttp.mockStartWorkflow('webhook-fast', 'exec-fast');
+          mockHttp.mockStartWorkflow('webhook-slow', 'exec-slow');
+
+          mockHttp.mockResponse('/api/execution/exec-fast', {
+            'id': 'exec-fast',
+            'workflowId': 'workflow-1',
+            'status': 'success',
+            'startedAt': DateTime.now().toIso8601String(),
+            'finishedAt': DateTime.now().toIso8601String(),
+          });
+
+          mockHttp.mockResponse('/api/execution/exec-slow', {
+            'id': 'exec-slow',
+            'workflowId': 'workflow-2',
+            'status': 'success',
+            'startedAt': DateTime.now().toIso8601String(),
+            'finishedAt': DateTime.now().toIso8601String(),
+          });
+
+          final inputStream = Stream.fromIterable([
+            const MapEntry('webhook-fast', {'data': '1'}),
+            const MapEntry('webhook-slow', {'data': '2'}),
+          ]);
+
+          final stream = client.startWorkflowsSequential(inputStream);
+          final results = await stream.toList();
+
+          // Results should be in input order
+          expect(results[0].id, equals('exec-fast'));
+          expect(results[1].id, equals('exec-slow'));
+        });
+
+        test('should wait for each workflow to complete before starting next', () async {
+          final timestamps = <DateTime>[];
+
+          mockHttp.onRequest('/api/start-workflow/webhook-1', () {
+            timestamps.add(DateTime.now());
+            return {
+              'id': 'exec-1',
+              'workflowId': 'workflow-1',
+              'status': 'running',
+              'startedAt': DateTime.now().toIso8601String(),
+            };
+          });
+
+          mockHttp.onRequest('/api/start-workflow/webhook-2', () {
+            timestamps.add(DateTime.now());
+            return {
+              'id': 'exec-2',
+              'workflowId': 'workflow-2',
+              'status': 'running',
+              'startedAt': DateTime.now().toIso8601String(),
+            };
+          });
+
+          // Workflow 1 completes after delay
+          var exec1PollCount = 0;
+          mockHttp.onRequest('/api/execution/exec-1', () {
+            exec1PollCount++;
+            if (exec1PollCount < 2) {
+              return {
+                'id': 'exec-1',
+                'workflowId': 'workflow-1',
+                'status': 'running',
+                'startedAt': DateTime.now().toIso8601String(),
+              };
+            }
+            return {
+              'id': 'exec-1',
+              'workflowId': 'workflow-1',
+              'status': 'success',
+              'startedAt': DateTime.now().toIso8601String(),
+              'finishedAt': DateTime.now().toIso8601String(),
+            };
+          });
+
+          mockHttp.mockResponse('/api/execution/exec-2', {
+            'id': 'exec-2',
+            'workflowId': 'workflow-2',
+            'status': 'success',
+            'startedAt': DateTime.now().toIso8601String(),
+            'finishedAt': DateTime.now().toIso8601String(),
+          });
+
+          final inputStream = Stream.fromIterable([
+            const MapEntry('webhook-1', {'data': '1'}),
+            const MapEntry('webhook-2', {'data': '2'}),
+          ]);
+
+          await client.startWorkflowsSequential(inputStream).toList();
+
+          // Workflow 2 should start after workflow 1
+          expect(timestamps, hasLength(2));
+          expect(timestamps[1].isAfter(timestamps[0]), isTrue);
+        });
+      });
+
+      group('raceWorkflows()', () {
+        test('should emit result from fastest workflow', () async {
+          // Mock fast and slow workflows
+          mockHttp.mockStartWorkflow('webhook-fast', 'exec-fast');
+          mockHttp.mockStartWorkflow('webhook-slow', 'exec-slow');
+
+          // Fast execution completes immediately
+          mockHttp.mockResponse('/api/execution/exec-fast', {
+            'id': 'exec-fast',
+            'workflowId': 'workflow-1',
+            'status': 'success',
+            'startedAt': DateTime.now().toIso8601String(),
+            'finishedAt': DateTime.now().toIso8601String(),
+          });
+
+          // Slow execution stays running
+          mockHttp.mockResponse('/api/execution/exec-slow', {
+            'id': 'exec-slow',
+            'workflowId': 'workflow-2',
+            'status': 'running',
+            'startedAt': DateTime.now().toIso8601String(),
+          });
+
+          final stream = client.raceWorkflows([
+            const MapEntry('webhook-fast', {'data': 'fast'}),
+            const MapEntry('webhook-slow', {'data': 'slow'}),
+          ]);
+
+          final result = await stream.first;
+
+          // Should get the fast execution
+          expect(result.id, equals('exec-fast'));
+          expect(result.status, equals(WorkflowStatus.success));
+        });
+
+        test('should return empty stream for empty input', () async {
+          final stream = client.raceWorkflows([]);
+
+          await expectLater(stream, emitsDone);
+        });
+
+        test('should complete when first workflow finishes', () async {
+          mockHttp.mockStartWorkflow('webhook-1', 'exec-1');
+          mockHttp.mockStartWorkflow('webhook-2', 'exec-2');
+
+          // First execution completes quickly
+          mockHttp.mockResponse('/api/execution/exec-1', {
+            'id': 'exec-1',
+            'workflowId': 'workflow-1',
+            'status': 'success',
+            'startedAt': DateTime.now().toIso8601String(),
+            'finishedAt': DateTime.now().toIso8601String(),
+          });
+
+          // Second execution also completes (but slower - race should pick first)
+          mockHttp.mockResponse('/api/execution/exec-2', {
+            'id': 'exec-2',
+            'workflowId': 'workflow-2',
+            'status': 'success',
+            'startedAt': DateTime.now().toIso8601String(),
+            'finishedAt': DateTime.now().toIso8601String(),
+          });
+
+          final stream = client.raceWorkflows([
+            const MapEntry('webhook-1', {'data': '1'}),
+            const MapEntry('webhook-2', {'data': '2'}),
+          ]);
+
+          // Get first completed execution (the race winner)
+          final result = await stream.first;
+
+          // Should get the fastest execution
+          expect(result.id, equals('exec-1'));
+        });
+
+        test('should handle errors and emit first successful result', () async {
+          mockHttp.mockStartWorkflow('webhook-success', 'exec-success');
+          mockHttp.mockStartWorkflow('webhook-backup', 'exec-backup');
+
+          // Success execution completes immediately
+          mockHttp.mockResponse('/api/execution/exec-success', {
+            'id': 'exec-success',
+            'workflowId': 'workflow-1',
+            'status': 'success',
+            'startedAt': DateTime.now().toIso8601String(),
+            'finishedAt': DateTime.now().toIso8601String(),
+          });
+
+          // Backup execution takes longer
+          mockHttp.mockResponse('/api/execution/exec-backup', {
+            'id': 'exec-backup',
+            'workflowId': 'workflow-2',
+            'status': 'running',
+            'startedAt': DateTime.now().toIso8601String(),
+          });
+
+          final stream = client.raceWorkflows([
+            const MapEntry('webhook-success', {'data': 'success'}),
+            const MapEntry('webhook-backup', {'data': 'backup'}),
+          ]);
+
+          final result = await stream.first;
+
+          // Should get the fastest execution
+          expect(result.id, equals('exec-success'));
+        });
+      });
+
+      group('Integration - Complex Workflow Patterns', () {
+        test('should handle sequential then batch pattern', () async {
+          // Sequential phase
+          mockHttp.mockStartWorkflow('webhook-seq-1', 'exec-seq-1');
+          mockHttp.mockStartWorkflow('webhook-seq-2', 'exec-seq-2');
+
+          mockHttp.mockResponse('/api/execution/exec-seq-1', {
+            'id': 'exec-seq-1',
+            'workflowId': 'workflow-1',
+            'status': 'success',
+            'startedAt': DateTime.now().toIso8601String(),
+            'finishedAt': DateTime.now().toIso8601String(),
+          });
+
+          mockHttp.mockResponse('/api/execution/exec-seq-2', {
+            'id': 'exec-seq-2',
+            'workflowId': 'workflow-2',
+            'status': 'success',
+            'startedAt': DateTime.now().toIso8601String(),
+            'finishedAt': DateTime.now().toIso8601String(),
+          });
+
+          final sequentialInput = Stream.fromIterable([
+            const MapEntry('webhook-seq-1', {'phase': 'sequential'}),
+            const MapEntry('webhook-seq-2', {'phase': 'sequential'}),
+          ]);
+
+          final sequentialResults = await client
+              .startWorkflowsSequential(sequentialInput)
+              .toList();
+
+          expect(sequentialResults, hasLength(2));
+
+          // Then batch phase
+          mockHttp.mockStartWorkflow('webhook-batch-1', 'exec-batch-1');
+          mockHttp.mockStartWorkflow('webhook-batch-2', 'exec-batch-2');
+
+          mockHttp.mockResponse('/api/execution/exec-batch-1', {
+            'id': 'exec-batch-1',
+            'workflowId': 'workflow-3',
+            'status': 'success',
+            'startedAt': DateTime.now().toIso8601String(),
+            'finishedAt': DateTime.now().toIso8601String(),
+          });
+
+          mockHttp.mockResponse('/api/execution/exec-batch-2', {
+            'id': 'exec-batch-2',
+            'workflowId': 'workflow-4',
+            'status': 'success',
+            'startedAt': DateTime.now().toIso8601String(),
+            'finishedAt': DateTime.now().toIso8601String(),
+          });
+
+          final batchResults = await client.batchStartWorkflows([
+            const MapEntry('webhook-batch-1', {'phase': 'batch'}),
+            const MapEntry('webhook-batch-2', {'phase': 'batch'}),
+          ]).first;
+
+          expect(batchResults, hasLength(2));
+        });
+
+        test('should handle race with fallback pattern', () async {
+          mockHttp.mockStartWorkflow('webhook-primary', 'exec-primary');
+          mockHttp.mockStartWorkflow('webhook-backup', 'exec-backup');
+
+          // Primary completes first
+          mockHttp.mockResponse('/api/execution/exec-primary', {
+            'id': 'exec-primary',
+            'workflowId': 'workflow-1',
+            'status': 'success',
+            'startedAt': DateTime.now().toIso8601String(),
+            'finishedAt': DateTime.now().toIso8601String(),
+          });
+
+          // Backup would complete slower
+          mockHttp.mockResponse('/api/execution/exec-backup', {
+            'id': 'exec-backup',
+            'workflowId': 'workflow-2',
+            'status': 'running',
+            'startedAt': DateTime.now().toIso8601String(),
+          });
+
+          final winner = await client.raceWorkflows([
+            const MapEntry('webhook-primary', {'type': 'primary'}),
+            const MapEntry('webhook-backup', {'type': 'backup'}),
+          ]).first;
+
+          expect(winner.id, equals('exec-primary'));
+        });
+      });
+
+      group('Performance Benchmarks', () {
+        test('should handle 100 concurrent polling streams without memory issues', () async {
+          final executionIds = List.generate(100, (i) => 'exec-$i');
+
+          // Mock all executions
+          for (final id in executionIds) {
+            mockHttp.mockResponse('/api/execution/$id', {
+              'id': id,
+              'workflowId': 'workflow-1',
+              'status': 'success',
+              'startedAt': DateTime.now().toIso8601String(),
+              'finishedAt': DateTime.now().toIso8601String(),
+            });
+          }
+
+          // Start polling all executions concurrently
+          final streams = executionIds
+              .map((id) => client.pollExecutionStatus(id))
+              .toList();
+
+          // Collect first emission from each
+          final results = await Future.wait(
+            streams.map((stream) => stream.first),
+          );
+
+          expect(results, hasLength(100));
+          expect(results.every((exec) => exec.status == WorkflowStatus.success), isTrue);
+        });
+
+        test('should handle rapid sequential workflow execution', () async {
+          const count = 50;
+
+          for (var i = 0; i < count; i++) {
+            mockHttp.mockStartWorkflow('webhook-$i', 'exec-$i');
+            mockHttp.mockResponse('/api/execution/exec-$i', {
+              'id': 'exec-$i',
+              'workflowId': 'workflow-1',
+              'status': 'success',
+              'startedAt': DateTime.now().toIso8601String(),
+              'finishedAt': DateTime.now().toIso8601String(),
+            });
+          }
+
+          final inputStream = Stream.fromIterable(
+            List.generate(count, (i) => MapEntry('webhook-$i', {'index': i})),
+          );
+
+          final results = await client.startWorkflowsSequential(inputStream).toList();
+
+          expect(results, hasLength(count));
+        });
+      });
+
+      group('Throughput Metrics', () {
+        test('should track metrics for batch operations', () async {
+          mockHttp.mockStartWorkflow('webhook-1', 'exec-1');
+          mockHttp.mockStartWorkflow('webhook-2', 'exec-2');
+
+          mockHttp.mockResponse('/api/execution/exec-1', {
+            'id': 'exec-1',
+            'workflowId': 'workflow-1',
+            'status': 'success',
+            'startedAt': DateTime.now().toIso8601String(),
+            'finishedAt': DateTime.now().toIso8601String(),
+          });
+
+          mockHttp.mockResponse('/api/execution/exec-2', {
+            'id': 'exec-2',
+            'workflowId': 'workflow-2',
+            'status': 'success',
+            'startedAt': DateTime.now().toIso8601String(),
+            'finishedAt': DateTime.now().toIso8601String(),
+          });
+
+          final metricsBefore = await client.metrics$.first;
+
+          await client.batchStartWorkflows([
+            const MapEntry('webhook-1', {'data': '1'}),
+            const MapEntry('webhook-2', {'data': '2'}),
+          ]).first;
+
+          await Future.delayed(const Duration(milliseconds: 100));
+
+          final metricsAfter = await client.metrics$.first;
+
+          // Should have increased request count
+          expect(metricsAfter.totalRequests, greaterThan(metricsBefore.totalRequests));
+        });
+
+        test('should calculate success rate correctly', () async {
+          mockHttp.mockStartWorkflow('webhook-success', 'exec-success');
+          mockHttp.onRequest('/api/start-workflow/webhook-error', () {
+            throw N8nException.serverError('Server error', statusCode: 500);
+          });
+
+          // Successful request
+          await client.startWorkflow('webhook-success', {}).first;
+
+          // Failed request
+          try {
+            await client.startWorkflow('webhook-error', {}).first;
+          } catch (_) {}
+
+          await Future.delayed(const Duration(milliseconds: 100));
+
+          final metrics = await client.metrics$.first;
+
+          expect(metrics.totalRequests, greaterThan(0));
+          expect(metrics.successfulRequests, greaterThan(0));
+          expect(metrics.failedRequests, greaterThan(0));
+          expect(metrics.successRate, lessThan(1.0));
+        });
+      });
+    });
   });
 }

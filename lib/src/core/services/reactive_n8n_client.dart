@@ -388,6 +388,49 @@ class ReactiveN8nClient {
         .flatMap((pair) => startWorkflow(pair.key, pair.value));
   }
 
+  /// Start workflows sequentially (one after another)
+  ///
+  /// Returns a stream that:
+  /// - Processes workflows one at a time (asyncExpand/concatMap equivalent)
+  /// - Waits for each to complete before starting next
+  /// - Maintains order
+  /// - Emits completed executions in sequence
+  Stream<WorkflowExecution> startWorkflowsSequential(
+    Stream<MapEntry<String, Map<String, dynamic>>> webhookDataStream,
+  ) {
+    return webhookDataStream.asyncExpand((pair) async* {
+      // Start workflow
+      final execution = await startWorkflow(pair.key, pair.value).first;
+
+      // Wait for completion
+      final completed = await pollExecutionStatus(execution.id).last;
+
+      // Emit completed execution
+      yield completed;
+    });
+  }
+
+  /// Race multiple workflows (first to complete wins)
+  ///
+  /// Returns a stream that:
+  /// - Starts all workflows in parallel
+  /// - Emits result from fastest execution (race)
+  /// - Cancels other executions when first completes
+  Stream<WorkflowExecution> raceWorkflows(
+    List<MapEntry<String, Map<String, dynamic>>> webhookDataPairs,
+  ) {
+    if (webhookDataPairs.isEmpty) {
+      return const Stream.empty();
+    }
+
+    final streams = webhookDataPairs
+        .map((pair) => startWorkflow(pair.key, pair.value)
+            .flatMap((execution) => pollExecutionStatus(execution.id)))
+        .toList();
+
+    return Rx.race(streams);
+  }
+
   // CONFIGURATION MANAGEMENT
 
   /// Update configuration reactively
