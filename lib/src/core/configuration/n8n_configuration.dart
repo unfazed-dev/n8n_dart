@@ -2,6 +2,7 @@
 ///
 /// Provides flexible configuration for different environments and use cases
 /// with builder pattern and preset profiles for easy setup.
+library;
 
 import '../exceptions/error_handling.dart';
 import '../services/polling_manager.dart';
@@ -80,7 +81,6 @@ class PerformanceConfig {
     return const PerformanceConfig(
       enableResponseTimeTracking: false,
       enableMemoryMonitoring: false,
-      enablePerformanceAlerts: false,
     );
   }
 
@@ -88,8 +88,6 @@ class PerformanceConfig {
   factory PerformanceConfig.highPerformance() {
     return const PerformanceConfig(
       metricsInterval: Duration(seconds: 30),
-      enableResponseTimeTracking: true,
-      enableMemoryMonitoring: true,
       maxMetricsHistory: 200,
       enablePerformanceAlerts: true,
       performanceAlertThreshold: Duration(seconds: 2),
@@ -139,7 +137,6 @@ class SecurityConfig {
   }) {
     return SecurityConfig(
       apiKey: apiKey,
-      validateSsl: true,
       rateLimitRequests: 100,
       enableRequestSigning: signingSecret != null,
       requestSigningSecret: signingSecret,
@@ -150,7 +147,6 @@ class SecurityConfig {
   factory SecurityConfig.withHeaders(Map<String, String> headers) {
     return SecurityConfig(
       customHeaders: headers,
-      validateSsl: true,
     );
   }
 
@@ -197,7 +193,6 @@ class CacheConfig {
     return const CacheConfig(
       defaultTtl: Duration(minutes: 30),
       maxCacheSize: 500,
-      enableCacheMetrics: true,
       cacheCleanupInterval: Duration(minutes: 5),
       enablePersistentCache: true,
     );
@@ -260,7 +255,6 @@ class WebhookConfig {
       timeout: Duration(minutes: 2),
       maxRetries: 5,
       retryDelay: Duration(seconds: 2),
-      enablePayloadValidation: true,
     );
   }
 

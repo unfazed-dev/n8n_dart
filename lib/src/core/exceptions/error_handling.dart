@@ -36,6 +36,7 @@ class N8nException implements Exception {
   final Map<String, dynamic>? metadata;
   final DateTime timestamp;
   final Exception? originalException;
+  final int? retryCount;
 
   N8nException(
     this.message,
@@ -44,6 +45,7 @@ class N8nException implements Exception {
     bool? isRetryable,
     this.metadata,
     this.originalException,
+    this.retryCount,
   })  : isRetryable = isRetryable ?? false,
         timestamp = DateTime.now();
 
@@ -118,6 +120,9 @@ class N8nException implements Exception {
       originalException: originalException,
     );
   }
+
+  /// Check if this is a network error
+  bool get isNetworkError => type == N8nErrorType.network;
 
   @override
   String toString() {
@@ -366,7 +371,7 @@ class N8nErrorHandler {
       );
     }
 
-    int attempt = 0;
+    var attempt = 0;
     N8nException? lastException;
 
     while (attempt <= config.maxRetries) {

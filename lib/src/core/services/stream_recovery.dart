@@ -49,7 +49,6 @@ class StreamErrorConfig {
   /// Create resilient configuration
   factory StreamErrorConfig.resilient() {
     return const StreamErrorConfig(
-      defaultStrategy: StreamRecoveryStrategy.retry,
       maxRetries: 5,
       initialRetryDelay: Duration(milliseconds: 200),
       maxRetryDelay: Duration(minutes: 2),
@@ -132,7 +131,7 @@ class StreamHealth {
     return StreamHealth(
       streamId: streamId,
       isHealthy: true,
-      successRate: 1.0,
+      successRate: 1,
       averageResponseTime: Duration.zero,
       totalRequests: 0,
       successfulRequests: 0,
@@ -496,7 +495,6 @@ extension StreamErrorRecovery<T> on Stream<T> {
     double backoffMultiplier = 2.0,
   }) {
     final config = StreamErrorConfig(
-      defaultStrategy: StreamRecoveryStrategy.retry,
       maxRetries: maxRetries,
       initialRetryDelay: delay,
       retryBackoffMultiplier: backoffMultiplier,
@@ -526,11 +524,9 @@ extension StreamErrorRecovery<T> on Stream<T> {
     Duration errorWindow = const Duration(minutes: 5),
   }) {
     final config = StreamErrorConfig(
-      defaultStrategy: StreamRecoveryStrategy.retry,
       healthCheckInterval: healthCheckInterval,
       errorThreshold: errorThreshold,
       errorWindow: errorWindow,
-      enableHealthMonitoring: true,
     );
 
     return withResilience(config: config);
@@ -548,7 +544,6 @@ extension StreamErrorRecovery<T> on Stream<T> {
           : StreamRecoveryStrategy.escalate,
       errorThreshold: errorThreshold,
       errorWindow: timeout,
-      enableHealthMonitoring: true,
     );
 
     return withResilience(

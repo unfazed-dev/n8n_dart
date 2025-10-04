@@ -51,11 +51,10 @@ void main() {
     test('round-trip preserves all workflow data', () async {
       final original = WorkflowBuilder.create()
           .name('Complex Workflow')
-          .active(true)
-          .version(2.0)
+          .active()
+          .version(2)
           .tags(['production', 'api'])
           .settings(const WorkflowSettings(
-            executionMode: 'sequential',
             timezone: 'America/New_York',
             executionTimeout: 3600,
           ))
@@ -103,8 +102,6 @@ void main() {
 
     test('generates complete user registration workflow', () async {
       final workflow = WorkflowTemplates.userRegistration(
-        webhookPath: 'auth/register',
-        tableName: 'users',
         fromEmail: 'welcome@app.com',
       );
 
@@ -158,7 +155,6 @@ void main() {
 
     test('generates multi-step form workflow with wait nodes', () async {
       final workflow = WorkflowTemplates.multiStepForm(
-        webhookPath: 'form/start',
         tableName: 'submissions',
       );
 
@@ -183,7 +179,6 @@ void main() {
       final workflow = WorkflowTemplates.scheduledReport(
         reportName: 'Weekly Sales',
         recipients: 'team@company.com',
-        schedule: '0 9 * * 1',
       );
 
       final filePath = '${tempDir.path}/scheduled_report.json';
@@ -442,7 +437,7 @@ void main() {
           .respondToWebhook(name: 'Response')
           .connect('Start', 'API Call')
           .connect('API Call', 'Check Success')
-          .connect('Check Success', 'Save Success', sourceIndex: 0)
+          .connect('Check Success', 'Save Success')
           .connect('Check Success', 'Log Error', sourceIndex: 1)
           .connect('Log Error', 'Alert Admin')
           .connect('Save Success', 'Response')

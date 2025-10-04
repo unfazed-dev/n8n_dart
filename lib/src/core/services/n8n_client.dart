@@ -70,7 +70,7 @@ class N8nClient {
     final body = json.encode({'body': initialData ?? {}});
 
     final response = await _errorHandler.executeWithRetry(() async {
-      return await _httpClient
+      return _httpClient
           .post(url, headers: headers, body: body)
           .timeout(config.webhook.timeout);
     });
@@ -111,7 +111,7 @@ class N8nClient {
     final headers = _buildHeaders();
 
     final response = await _errorHandler.executeWithRetry(() async {
-      return await _httpClient
+      return _httpClient
           .get(url, headers: headers)
           .timeout(config.webhook.timeout);
     });
@@ -164,7 +164,7 @@ class N8nClient {
     final body = json.encode({'body': inputData});
 
     final response = await _errorHandler.executeWithRetry(() async {
-      return await _httpClient
+      return _httpClient
           .post(url, headers: headers, body: body)
           .timeout(config.webhook.timeout);
     });
@@ -195,7 +195,7 @@ class N8nClient {
     final headers = _buildHeaders();
 
     final response = await _errorHandler.executeWithRetry(() async {
-      return await _httpClient
+      return _httpClient
           .delete(url, headers: headers)
           .timeout(config.webhook.timeout);
     });

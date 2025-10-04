@@ -51,11 +51,8 @@ class WorkflowNode {
   final String? notesInFlow;
 
   WorkflowNode({
-    String? id,
-    required this.name,
-    required this.type,
+    required this.name, required this.type, required this.position, String? id,
     this.typeVersion = 1,
-    required this.position,
     this.parameters = const {},
     this.credentials,
     this.disabled,
@@ -68,7 +65,7 @@ class WorkflowNode {
 
   static String _generateNodeId() {
     _idCounter++;
-    return '${DateTime.now().millisecondsSinceEpoch}_${_idCounter}';
+    return '${DateTime.now().millisecondsSinceEpoch}_$_idCounter';
   }
 
   Map<String, dynamic> toJson() {
@@ -151,13 +148,10 @@ class N8nWorkflow {
   final String? pinData;
 
   const N8nWorkflow({
-    this.id,
-    required this.name,
+    required this.name, required this.nodes, required this.connections, this.id,
     this.active = false,
     this.version = 1.0,
     this.settings = const WorkflowSettings(),
-    required this.nodes,
-    required this.connections,
     this.tags,
     this.staticData,
     this.pinData,
@@ -166,7 +160,7 @@ class N8nWorkflow {
   /// Convert workflow to JSON string
   String toJson() {
     final json = _toJsonMap();
-    return JsonEncoder.withIndent('  ').convert(json);
+    return const JsonEncoder.withIndent('  ').convert(json);
   }
 
   /// Convert workflow to JSON Map

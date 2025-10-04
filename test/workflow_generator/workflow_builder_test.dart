@@ -42,7 +42,7 @@ void main() {
 
     test('sets workflow version', () {
       final workflow = WorkflowBuilder.create()
-          .version(2.0)
+          .version(2)
           .build();
 
       expect(workflow.version, equals(2.0));
@@ -244,7 +244,7 @@ void main() {
           .node(name: 'Multi Output', type: 'test')
           .node(name: 'Target 1', type: 'test')
           .node(name: 'Target 2', type: 'test')
-          .connect('Multi Output', 'Target 1', sourceIndex: 0)
+          .connect('Multi Output', 'Target 1')
           .connect('Multi Output', 'Target 2', sourceIndex: 1)
           .build();
 
@@ -282,7 +282,7 @@ void main() {
       final workflow = WorkflowBuilder.create()
           .name('Chained Workflow')
           .active()
-          .version(2.0)
+          .version(2)
           .tags(['test', 'chained'])
           .node(name: 'Node 1', type: 'test')
           .node(name: 'Node 2', type: 'test')
@@ -382,7 +382,7 @@ void main() {
           .newRow()
           .node(name: 'End', type: 'respond')
           .connect('Start', 'Check Condition')
-          .connect('Check Condition', 'True Path', sourceIndex: 0)
+          .connect('Check Condition', 'True Path')
           .connect('Check Condition', 'False Path', sourceIndex: 1)
           .connect('True Path', 'End')
           .connect('False Path', 'End')

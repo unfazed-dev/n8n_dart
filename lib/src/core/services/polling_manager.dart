@@ -123,13 +123,10 @@ class PollingConfig {
   /// Create battery-optimized configuration
   factory PollingConfig.batteryOptimized() {
     return const PollingConfig(
-      strategy: PollingStrategy.smart,
       baseInterval: Duration(seconds: 30),
       minInterval: Duration(seconds: 10),
       maxInterval: Duration(minutes: 10),
-      backoffMultiplier: 2.0,
-      enableBatteryOptimization: true,
-      enableAdaptiveThrottling: true,
+      backoffMultiplier: 2,
     );
   }
 
@@ -137,7 +134,6 @@ class PollingConfig {
   factory PollingConfig.balanced() {
     return const PollingConfig(
       strategy: PollingStrategy.hybrid,
-      baseInterval: Duration(seconds: 5),
       minInterval: Duration(seconds: 2),
       maxInterval: Duration(minutes: 2),
       backoffMultiplier: 1.3,
@@ -177,9 +173,7 @@ class PollingMetrics {
     required this.totalPollingTime,
     required this.averageInterval,
     required this.startTime,
-    this.endTime,
-    required this.recentIntervals,
-    required this.statusCounts,
+    required this.recentIntervals, required this.statusCounts, this.endTime,
   });
 
   /// Create initial metrics
@@ -199,13 +193,13 @@ class PollingMetrics {
 
   /// Calculate success rate
   double get successRate {
-    if (totalPolls == 0) return 1.0;
+    if (totalPolls == 0) return 1;
     return successfulPolls / totalPolls;
   }
 
   /// Calculate error rate
   double get errorRate {
-    if (totalPolls == 0) return 0.0;
+    if (totalPolls == 0) return 0;
     return errorCount / totalPolls;
   }
 
@@ -502,7 +496,7 @@ class SmartPollingManager {
     if (lastActivity == null) return config.baseInterval;
 
     // Start with adaptive interval
-    Duration interval = _calculateAdaptiveInterval(executionId);
+    var interval = _calculateAdaptiveInterval(executionId);
 
     // Apply exponential backoff for inactive workflows
     if (!lastActivity.isActive) {
@@ -565,11 +559,11 @@ class SmartPollingManager {
     // Gradually increase polling interval for long-inactive workflows
     final minutes = inactiveTime.inMinutes;
 
-    if (minutes < 5) return 1.0;
+    if (minutes < 5) return 1;
     if (minutes < 15) return 1.5;
-    if (minutes < 30) return 2.0;
-    if (minutes < 60) return 3.0;
-    return 4.0;
+    if (minutes < 30) return 2;
+    if (minutes < 60) return 3;
+    return 4;
   }
 
   /// Apply activity-based throttling

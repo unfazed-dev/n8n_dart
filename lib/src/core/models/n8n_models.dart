@@ -7,9 +7,7 @@ class ValidationResult<T> {
   final bool isValid;
 
   const ValidationResult._({
-    this.value,
-    required this.errors,
-    required this.isValid,
+    required this.errors, required this.isValid, this.value,
   });
 
   /// Create a successful validation result
@@ -24,7 +22,6 @@ class ValidationResult<T> {
   /// Create a failed validation result
   factory ValidationResult.failure(List<String> errors) {
     return ValidationResult._(
-      value: null,
       errors: errors,
       isValid: false,
     );
@@ -33,7 +30,6 @@ class ValidationResult<T> {
   /// Create a failed validation result with single error
   factory ValidationResult.error(String error) {
     return ValidationResult._(
-      value: null,
       errors: [error],
       isValid: false,
     );
@@ -433,10 +429,8 @@ class WaitNodeData with Validator {
   const WaitNodeData({
     required this.nodeId,
     required this.nodeName,
-    this.description,
-    required this.fields,
+    required this.fields, required this.createdAt, this.description,
     this.metadata,
-    required this.createdAt,
     this.expiresAt,
   });
 
@@ -462,7 +456,7 @@ class WaitNodeData with Validator {
       final fieldsJson = json['fields'] as List<dynamic>? ?? [];
       final fields = <FormFieldConfig>[];
 
-      for (int i = 0; i < fieldsJson.length; i++) {
+      for (var i = 0; i < fieldsJson.length; i++) {
         final fieldResult =
             FormFieldConfig.fromJsonSafe(fieldsJson[i] as Map<String, dynamic>);
 
@@ -619,6 +613,15 @@ class WorkflowExecution with Validator {
     this.executionTime,
   });
 
+  /// Create WorkflowExecution from JSON (throws on validation error)
+  factory WorkflowExecution.fromJson(Map<String, dynamic> json) {
+    final result = fromJsonSafe(json);
+    if (!result.isValid) {
+      throw Exception('Invalid WorkflowExecution: ${result.errors.join(', ')}');
+    }
+    return result.value!;
+  }
+
   /// Create WorkflowExecution from JSON with validation
   static ValidationResult<WorkflowExecution> fromJsonSafe(
       Map<String, dynamic> json) {
@@ -727,6 +730,9 @@ class WorkflowExecution with Validator {
 
   /// Check if execution is finished
   bool get isFinished => status.isFinished;
+
+  /// Convenience getter for checking if execution is finished (alias)
+  bool get finished => isFinished;
 
   /// Check if execution is active
   bool get isActive => status.isActive;

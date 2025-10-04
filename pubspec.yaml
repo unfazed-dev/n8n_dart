@@ -13,8 +13,7 @@ dependencies:
   http: ^1.1.0
 
   # Reactive programming with BehaviorSubjects
-  rxdart: ^0.27.7
-
+  rxdart: ^0.28.0
   # Annotations and meta programming
   meta: ^1.10.0
 

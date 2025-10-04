@@ -43,7 +43,6 @@ void main() {
     test('converts to JSON', () {
       const connection = NodeConnection(
         node: 'TestNode',
-        type: 'main',
         index: 1,
       );
 
@@ -128,7 +127,6 @@ void main() {
         id: 'test-123',
         name: 'Webhook Trigger',
         type: 'n8n-nodes-base.webhook',
-        typeVersion: 1,
         position: const NodePosition(100, 200),
         parameters: {
           'path': 'test-webhook',
@@ -172,8 +170,6 @@ void main() {
 
     test('converts to JSON with only non-null values', () {
       const settings = WorkflowSettings(
-        executionMode: 'sequential',
-        timezone: 'UTC',
         executionTimeout: 3600,
       );
 
@@ -204,7 +200,7 @@ void main() {
 
   group('N8nWorkflow', () {
     test('creates minimal workflow', () {
-      final workflow = N8nWorkflow(
+      const workflow = N8nWorkflow(
         name: 'Test Workflow',
         nodes: [],
         connections: {},
@@ -254,7 +250,7 @@ void main() {
     });
 
     test('converts to JSON string', () {
-      final workflow = N8nWorkflow(
+      const workflow = N8nWorkflow(
         name: 'Test',
         nodes: [],
         connections: {},
@@ -270,7 +266,7 @@ void main() {
     });
 
     test('includes tags when provided', () {
-      final workflow = N8nWorkflow(
+      const workflow = N8nWorkflow(
         name: 'Tagged Workflow',
         tags: ['production', 'api'],
         nodes: [],
@@ -298,11 +294,6 @@ void main() {
       final workflow = N8nWorkflow(
         name: 'Complete Workflow',
         active: true,
-        version: 1.0,
-        settings: const WorkflowSettings(
-          executionMode: 'sequential',
-          timezone: 'UTC',
-        ),
         nodes: [node],
         connections: {},
         tags: ['test'],
@@ -320,7 +311,7 @@ void main() {
     });
 
     test('saves to file successfully', () async {
-      final workflow = N8nWorkflow(
+      const workflow = N8nWorkflow(
         name: 'File Test',
         nodes: [],
         connections: {},
@@ -379,7 +370,6 @@ void main() {
       final original = N8nWorkflow(
         name: 'Round Trip Test',
         active: true,
-        version: 1.0,
         nodes: [
           WorkflowNode(
             id: 'node1',
@@ -443,21 +433,21 @@ void main() {
 
   group('N8nWorkflow connections', () {
     test('handles complex connection structures', () {
-      final workflow = N8nWorkflow(
+      const workflow = N8nWorkflow(
         name: 'Complex Connections',
         nodes: [],
         connections: {
           'Node1': {
             'main': [
               [
-                const NodeConnection(node: 'Node2', index: 0),
-                const NodeConnection(node: 'Node3', index: 0),
+                NodeConnection(node: 'Node2'),
+                NodeConnection(node: 'Node3'),
               ],
             ],
           },
           'Node2': {
             'main': [
-              [const NodeConnection(node: 'Node4')],
+              [NodeConnection(node: 'Node4')],
             ],
           },
         },
@@ -471,7 +461,7 @@ void main() {
     });
 
     test('handles empty connections', () {
-      final workflow = N8nWorkflow(
+      const workflow = N8nWorkflow(
         name: 'No Connections',
         nodes: [],
         connections: {},

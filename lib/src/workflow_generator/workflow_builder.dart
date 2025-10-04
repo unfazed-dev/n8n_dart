@@ -118,7 +118,6 @@ class WorkflowBuilder {
     _connections[sourceNodeName]![outputType]![sourceIndex].add(
       NodeConnection(
         node: targetNodeName,
-        type: 'main',
         index: targetIndex,
       ),
     );
