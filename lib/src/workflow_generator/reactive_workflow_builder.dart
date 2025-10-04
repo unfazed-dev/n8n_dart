@@ -30,6 +30,11 @@ class ReactiveWorkflowBuilder {
   bool _isActive = false;
   final List<String> _tags = [];
 
+  /// Constructor - validates empty workflow on init
+  ReactiveWorkflowBuilder() {
+    _validate();
+  }
+
   /// Stream of current nodes
   Stream<List<WorkflowNode>> get nodes$ => _nodes$.stream;
 

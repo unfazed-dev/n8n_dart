@@ -42,15 +42,16 @@ void main() {
       });
 
       test('enqueue() should emit QueueItemEnqueuedEvent', () async {
+        // Start listening before enqueue
+        final eventFuture = queue.events$.first;
+
         queue.enqueue(
           webhookId: 'webhook-1',
           data: {'test': 'data'},
         );
 
-        await expectLater(
-          queue.events$,
-          emits(isA<QueueItemEnqueuedEvent>()),
-        );
+        final event = await eventFuture;
+        expect(event, isA<QueueItemEnqueuedEvent>());
       });
 
       test('enqueue() should respect priority ordering', () async {
