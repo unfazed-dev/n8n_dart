@@ -19,6 +19,7 @@ class MockN8nHttpClient extends http.BaseClient {
   final Map<String, List<Function(http.Request)>> _requestCallbacks = {};
   final List<http.Request> _requestHistory = [];
   final Map<String, Map<String, dynamic> Function()> _dynamicResponses = {};
+  final Map<String, dynamic Function()> _callbackResponses = {};
 
   /// Mock a successful response for a specific path
   void mockResponse(String path, Map<String, dynamic> response,
@@ -52,7 +53,12 @@ class MockN8nHttpClient extends http.BaseClient {
   }
 
   /// Register a callback to be invoked when a request is made to a path
-  void onRequest(String path, Function(http.Request) callback) {
+  void onRequest(String path, dynamic Function() callback) {
+    _callbackResponses[path] = callback;
+  }
+
+  /// Register a request observer callback
+  void observeRequest(String path, Function(http.Request) callback) {
     _requestCallbacks.putIfAbsent(path, () => []);
     _requestCallbacks[path]!.add(callback);
   }
@@ -91,8 +97,12 @@ class MockN8nHttpClient extends http.BaseClient {
   /// Mock workflow start endpoint
   void mockStartWorkflow(String webhookId, String executionId,
       {int statusCode = 200}) {
-    mockResponse('/api/start-workflow/$webhookId',
-        {'executionId': executionId}, statusCode: statusCode);
+    mockResponse('/api/start-workflow/$webhookId', {
+      'id': executionId,
+      'workflowId': 'workflow-1',
+      'status': 'running',
+      'startedAt': DateTime.now().toIso8601String(),
+    }, statusCode: statusCode);
   }
 
   /// Mock execution status endpoint
@@ -140,9 +150,39 @@ class MockN8nHttpClient extends http.BaseClient {
       }
     }
 
-    // Check for error mock
+    // Check for error mock first
     if (_errors.containsKey(path)) {
       throw _errors[path]!;
+    }
+
+    // Check for callback responses (allows throwing exceptions)
+    if (_callbackResponses.containsKey(path)) {
+      try {
+        final result = _callbackResponses[path]!();
+
+        // If result is bool, wrap it in a response
+        if (result is bool) {
+          return http.StreamedResponse(
+            Stream.value(utf8.encode(json.encode({'success': result}))),
+            200,
+            headers: {'content-type': 'application/json'},
+            request: request,
+          );
+        }
+
+        // If result is Map, use it as response body
+        if (result is Map<String, dynamic>) {
+          return http.StreamedResponse(
+            Stream.value(utf8.encode(json.encode(result))),
+            200,
+            headers: {'content-type': 'application/json'},
+            request: request,
+          );
+        }
+      } catch (e) {
+        // Re-throw exceptions from callbacks
+        rethrow;
+      }
     }
 
     // Check for dynamic responses

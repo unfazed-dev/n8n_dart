@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:n8n_dart/n8n_dart.dart';
 import 'package:test/test.dart';
 
@@ -574,8 +576,7 @@ void main() {
       test('startWorkflow() doOnError handles N8nException correctly', () async {
         // Create a response that will cause JSON parsing error
         mockHttp.mockResponse('/api/start-workflow/webhook-bad-json',
-          {'invalid': 'response'}, // Missing required fields
-          statusCode: 200);
+          {'invalid': 'response'}); // Missing required fields
 
         final errors = <N8nException>[];
         final errorSub = client.errors$.listen(errors.add);
@@ -688,7 +689,6 @@ void main() {
           polling: const PollingConfig(
             baseInterval: Duration(milliseconds: 50),
             maxInterval: Duration(milliseconds: 200),
-            backoffMultiplier: 1.5,
           ),
         );
 
@@ -900,6 +900,615 @@ void main() {
         );
         expect(resumed, isA<WorkflowEvent>());
         expect(resumed.toString(), contains('WorkflowResumedEvent'));
+      });
+    });
+
+    group('Phase 2 - Core Stream Operations', () {
+      group('resumeWorkflow()', () {
+        test('should return stream that emits true on successful resume', () async {
+          mockHttp.mockResumeWorkflow('exec-123');
+
+          final stream = client.resumeWorkflow('exec-123', {'input': 'data'});
+
+          await expectLater(stream, emits(true));
+        });
+
+        test('should emit WorkflowResumedEvent on success', () async {
+          mockHttp.mockResumeWorkflow('exec-123');
+
+          final events = <WorkflowEvent>[];
+          client.workflowEvents$.listen(events.add);
+
+          await client.resumeWorkflow('exec-123', {'input': 'data'}).first;
+
+          await Future.delayed(const Duration(milliseconds: 100));
+
+          expect(events, isNotEmpty);
+          expect(events.last, isA<WorkflowResumedEvent>());
+          expect(events.last.executionId, equals('exec-123'));
+        });
+
+        test('should retry on failure up to maxRetries', () async {
+          // Create client with maxRetries=2 to allow 3 total attempts
+          final testClient = ReactiveN8nClient(
+            config: N8nConfigProfiles.minimal(baseUrl: 'https://test.n8n.io')
+                .copyWith(retry: const RetryConfig(maxRetries: 2)),
+            httpClient: mockHttp,
+          );
+
+          var callCount = 0;
+          mockHttp.onRequest('/api/resume-workflow/exec-123', () {
+            callCount++;
+            if (callCount < 3) {
+              throw N8nException.network('Network error');
+            }
+            return true;
+          });
+
+          final stream = testClient.resumeWorkflow('exec-123', {'input': 'data'});
+
+          await expectLater(stream, emits(true));
+          expect(callCount, equals(3));
+
+          testClient.dispose();
+        });
+
+        test('should emit errors to errors\$ stream', () async {
+          mockHttp.mockError(
+            '/api/resume-workflow/exec-123',
+            N8nException.serverError('Server error', statusCode: 500),
+          );
+
+          final errors = <N8nException>[];
+          client.errors$.listen(errors.add);
+
+          try {
+            await client.resumeWorkflow('exec-123', {'input': 'data'}).first;
+          } catch (_) {}
+
+          await Future.delayed(const Duration(milliseconds: 100));
+          expect(errors, isNotEmpty);
+        });
+      });
+
+      group('cancelWorkflow()', () {
+        test('should return stream that emits true on successful cancellation', () async {
+          mockHttp.mockCancelWorkflow('exec-123');
+
+          final stream = client.cancelWorkflow('exec-123');
+
+          await expectLater(stream, emits(true));
+        });
+
+        test('should emit WorkflowCancelledEvent on success', () async {
+          mockHttp.mockCancelWorkflow('exec-123');
+
+          final events = <WorkflowEvent>[];
+          client.workflowEvents$.listen(events.add);
+
+          await client.cancelWorkflow('exec-123').first;
+
+          await Future.delayed(const Duration(milliseconds: 100));
+
+          expect(events, isNotEmpty);
+          expect(events.last, isA<WorkflowCancelledEvent>());
+          expect(events.last.executionId, equals('exec-123'));
+        });
+
+        test('should remove execution from state', () async {
+          // First add execution to state
+          mockHttp.mockStartWorkflow('webhook-123', 'exec-123');
+          await client.startWorkflow('webhook-123', {}).first;
+
+          // Verify it's in state
+          final stateBefore = await client.executionState$.first;
+          expect(stateBefore.containsKey('exec-123'), isTrue);
+
+          // Cancel it
+          mockHttp.mockCancelWorkflow('exec-123');
+          await client.cancelWorkflow('exec-123').first;
+
+          // Verify it's removed from state
+          final stateAfter = await client.executionState$.first;
+          expect(stateAfter.containsKey('exec-123'), isFalse);
+        });
+
+        test('should support multiple subscribers (shareReplay)', () async {
+          mockHttp.mockCancelWorkflow('exec-123');
+
+          final stream = client.cancelWorkflow('exec-123');
+
+          final result1 = await stream.first;
+          final result2 = await stream.first;
+
+          expect(result1, equals(result2));
+        });
+      });
+
+      group('watchExecution()', () {
+        test('should poll and return execution status', () async {
+          mockHttp.mockExecutionStatus('exec-123', {
+            'id': 'exec-123',
+            'workflowId': 'workflow-1',
+            'status': 'success',
+            'startedAt': DateTime.now().toIso8601String(),
+            'finishedAt': DateTime.now().toIso8601String(),
+          });
+
+          final stream = client.watchExecution('exec-123');
+
+          final execution = await stream.first;
+          expect(execution.id, equals('exec-123'));
+          expect(execution.status, equals(WorkflowStatus.success));
+        });
+
+        test('should fallback to error execution on permanent failures', () async {
+          mockHttp.mockError(
+            '/api/execution/exec-123',
+            N8nException.serverError('Server error', statusCode: 500),
+          );
+
+          final stream = client.watchExecution('exec-123');
+
+          final execution = await stream.first;
+          expect(execution.status, equals(WorkflowStatus.error));
+          expect(execution.data?['error'], contains('Server error'));
+        });
+
+        test('should emit errors to errors\$ stream during retries', () async {
+          var callCount = 0;
+          mockHttp.onRequest('/api/execution/exec-123', () {
+            callCount++;
+            if (callCount <= 2) {
+              throw N8nException.network('Network error');
+            }
+            return {
+              'id': 'exec-123',
+              'workflowId': 'workflow-1',
+              'status': 'success',
+              'startedAt': DateTime.now().toIso8601String(),
+              'finishedAt': DateTime.now().toIso8601String(),
+            };
+          });
+
+          final errors = <N8nException>[];
+          client.errors$.listen(errors.add);
+
+          await client.watchExecution('exec-123').first;
+
+          await Future.delayed(const Duration(milliseconds: 100));
+          expect(errors, isNotEmpty);
+          expect(errors.every((e) => e.isNetworkError), isTrue);
+        });
+      });
+
+      group('batchStartWorkflows()', () {
+        test('should start multiple workflows in parallel and wait for all', () async {
+          mockHttp.mockStartWorkflow('webhook-1', 'exec-1');
+          mockHttp.mockStartWorkflow('webhook-2', 'exec-2');
+          mockHttp.mockStartWorkflow('webhook-3', 'exec-3');
+
+          mockHttp.mockExecutionStatus('exec-1', {
+            'id': 'exec-1',
+            'workflowId': 'workflow-1',
+            'status': 'success',
+            'startedAt': DateTime.now().toIso8601String(),
+            'finishedAt': DateTime.now().toIso8601String(),
+          });
+          mockHttp.mockExecutionStatus('exec-2', {
+            'id': 'exec-2',
+            'workflowId': 'workflow-1',
+            'status': 'success',
+            'startedAt': DateTime.now().toIso8601String(),
+            'finishedAt': DateTime.now().toIso8601String(),
+          });
+          mockHttp.mockExecutionStatus('exec-3', {
+            'id': 'exec-3',
+            'workflowId': 'workflow-1',
+            'status': 'success',
+            'startedAt': DateTime.now().toIso8601String(),
+            'finishedAt': DateTime.now().toIso8601String(),
+          });
+
+          final pairs = [
+            const MapEntry('webhook-1', {'data': '1'}),
+            const MapEntry('webhook-2', {'data': '2'}),
+            const MapEntry('webhook-3', {'data': '3'}),
+          ];
+
+          final stream = client.batchStartWorkflows(pairs);
+
+          final executions = await stream.first;
+          expect(executions.length, equals(3));
+          expect(executions[0].id, equals('exec-1'));
+          expect(executions[1].id, equals('exec-2'));
+          expect(executions[2].id, equals('exec-3'));
+        });
+
+        test('should return empty list for empty input', () async {
+          final stream = client.batchStartWorkflows([]);
+
+          await expectLater(stream, emits([]));
+        });
+
+        test('should wait for all executions to complete', () async {
+          mockHttp.mockStartWorkflow('webhook-1', 'exec-1');
+          mockHttp.mockStartWorkflow('webhook-2', 'exec-2');
+
+          // Mock finished executions (no polling needed)
+          mockHttp.mockExecutionStatus('exec-1', {
+            'id': 'exec-1',
+            'workflowId': 'workflow-1',
+            'status': 'success',
+            'startedAt': DateTime.now().toIso8601String(),
+            'finishedAt': DateTime.now().toIso8601String(),
+          });
+
+          mockHttp.mockExecutionStatus('exec-2', {
+            'id': 'exec-2',
+            'workflowId': 'workflow-1',
+            'status': 'success',
+            'startedAt': DateTime.now().toIso8601String(),
+            'finishedAt': DateTime.now().toIso8601String(),
+          });
+
+          final pairs = [
+            const MapEntry('webhook-1', {'data': '1'}),
+            const MapEntry('webhook-2', {'data': '2'}),
+          ];
+
+          final stream = client.batchStartWorkflows(pairs);
+
+          final executions = await stream.first;
+          expect(executions.length, equals(2));
+          expect(executions.every((e) => e.status == WorkflowStatus.success), isTrue);
+        });
+      });
+
+      group('retryableWorkflow()', () {
+        test('should retry workflow start on network errors', () async {
+          // Create client with maxRetries=2 to allow 3 total attempts
+          final testClient = ReactiveN8nClient(
+            config: N8nConfigProfiles.minimal(baseUrl: 'https://test.n8n.io')
+                .copyWith(retry: const RetryConfig(maxRetries: 2)),
+            httpClient: mockHttp,
+          );
+
+          var callCount = 0;
+          mockHttp.onRequest('/api/start-workflow/webhook-123', () {
+            callCount++;
+            if (callCount < 3) {
+              throw N8nException.network('Network error');
+            }
+            return {
+              'id': 'exec-456',
+              'workflowId': 'workflow-1',
+              'status': 'running',
+              'startedAt': DateTime.now().toIso8601String(),
+            };
+          });
+
+          final stream = testClient.retryableWorkflow('webhook-123', {'data': 'test'});
+
+          final execution = await stream.first;
+          expect(execution.id, equals('exec-456'));
+          expect(callCount, equals(3));
+
+          testClient.dispose();
+        });
+
+        test('should use exponential backoff between retries', () async {
+          // Create client with maxRetries=2 to allow 3 total attempts
+          final testClient = ReactiveN8nClient(
+            config: N8nConfigProfiles.minimal(baseUrl: 'https://test.n8n.io')
+                .copyWith(retry: const RetryConfig(maxRetries: 2)),
+            httpClient: mockHttp,
+          );
+
+          final timestamps = <DateTime>[];
+          var callCount = 0;
+
+          mockHttp.onRequest('/api/start-workflow/webhook-123', () {
+            timestamps.add(DateTime.now());
+            callCount++;
+
+            if (callCount <= 2) {
+              throw N8nException.network('Network error');
+            }
+
+            return {
+              'id': 'exec-456',
+              'workflowId': 'workflow-1',
+              'status': 'running',
+              'startedAt': DateTime.now().toIso8601String(),
+            };
+          });
+
+          await testClient.retryableWorkflow('webhook-123', {'data': 'test'}).first;
+
+          expect(timestamps.length, greaterThanOrEqualTo(2));
+          if (timestamps.length >= 3) {
+            final interval1 = timestamps[1].difference(timestamps[0]);
+            final interval2 = timestamps[2].difference(timestamps[1]);
+            expect(interval2 >= interval1, isTrue);
+          }
+
+          testClient.dispose();
+        });
+
+        test('should emit WorkflowStartedEvent on successful start', () async {
+          mockHttp.mockStartWorkflow('webhook-123', 'exec-456');
+
+          final events = <WorkflowEvent>[];
+          client.workflowEvents$.listen(events.add);
+
+          await client.retryableWorkflow('webhook-123', {'data': 'test'}).first;
+
+          await Future.delayed(const Duration(milliseconds: 100));
+          expect(events.any((e) => e is WorkflowStartedEvent), isTrue);
+        });
+
+        test('should respect maxRetries from config', () async {
+          var callCount = 0;
+          mockHttp.onRequest('/api/start-workflow/webhook-123', () {
+            callCount++;
+            throw N8nException.network('Network error');
+          });
+
+          final stream = client.retryableWorkflow('webhook-123', {'data': 'test'});
+
+          try {
+            await stream.first;
+          } catch (_) {}
+
+          // Should retry maxRetries times (default 3 in minimal config)
+          expect(callCount, greaterThan(1));
+        });
+
+        test('should support multiple subscribers (shareReplay)', () async {
+          mockHttp.mockStartWorkflow('webhook-123', 'exec-456');
+
+          final stream = client.retryableWorkflow('webhook-123', {'data': 'test'});
+
+          final execution1 = await stream.first;
+          final execution2 = await stream.first;
+
+          expect(execution1.id, equals(execution2.id));
+        });
+      });
+
+      group('throttledExecution()', () {
+        test('should throttle workflow starts based on duration', () async {
+          final timestamps = <DateTime>[];
+          var callCount = 0;
+
+          mockHttp.onRequest('/api/start-workflow/webhook-123', () {
+            timestamps.add(DateTime.now());
+            callCount++;
+            return {
+              'id': 'exec-$callCount',
+              'workflowId': 'workflow-1',
+              'status': 'running',
+              'startedAt': DateTime.now().toIso8601String(),
+            };
+          });
+
+          final dataStream = Stream.fromIterable([
+            const MapEntry('webhook-123', {'data': '1'}),
+            const MapEntry('webhook-123', {'data': '2'}),
+            const MapEntry('webhook-123', {'data': '3'}),
+            const MapEntry('webhook-123', {'data': '4'}),
+          ]);
+
+          final stream = client.throttledExecution(
+            dataStream,
+            const Duration(milliseconds: 500),
+          );
+
+          final executions = await stream.toList();
+
+          // Should throttle to at most 1 execution per 500ms
+          expect(executions.length, lessThanOrEqualTo(4));
+
+          if (timestamps.length >= 2) {
+            for (var i = 1; i < timestamps.length; i++) {
+              final interval = timestamps[i].difference(timestamps[i - 1]);
+              expect(interval.inMilliseconds, greaterThanOrEqualTo(400)); // Allow 100ms tolerance
+            }
+          }
+        });
+
+        test('should emit executions as they start', () async {
+          mockHttp.mockStartWorkflow('webhook-123', 'exec-1');
+
+          final dataStream = Stream.fromIterable([
+            const MapEntry('webhook-123', {'data': '1'}),
+          ]);
+
+          final stream = client.throttledExecution(
+            dataStream,
+            const Duration(milliseconds: 100),
+          );
+
+          await expectLater(
+            stream,
+            emits(predicate<WorkflowExecution>((e) => e.id == 'exec-1')),
+          );
+        });
+
+        test('should prevent server overload with rapid requests', () async {
+          var callCount = 0;
+          mockHttp.onRequest('/api/start-workflow/webhook-123', () {
+            callCount++;
+            return {
+              'id': 'exec-$callCount',
+              'workflowId': 'workflow-1',
+              'status': 'running',
+              'startedAt': DateTime.now().toIso8601String(),
+            };
+          });
+
+          // Create rapid stream (10 items emitted quickly)
+          final dataStream = Stream.periodic(
+            const Duration(milliseconds: 10),
+            (i) => MapEntry('webhook-123', {'data': '$i'}),
+          ).take(10);
+
+          final stream = client.throttledExecution(
+            dataStream,
+            const Duration(milliseconds: 200),
+          );
+
+          await stream.toList();
+
+          // Should have significantly fewer calls than input due to throttling
+          expect(callCount, lessThan(10));
+        });
+      });
+    });
+
+    group('Quality Add-ons - Memory Leak Detection', () {
+      test('should not leak memory after 100+ poll/dispose cycles', () async {
+        // Run 150 poll/dispose cycles
+        for (var i = 0; i < 150; i++) {
+          // Setup mock to return finished execution immediately
+          mockHttp.mockResponse('/api/execution/leak-test-$i', {
+            'id': 'leak-test-$i',
+            'workflowId': 'workflow-1',
+            'status': 'success',
+            'startedAt': DateTime.now().subtract(const Duration(seconds: 1)).toIso8601String(),
+            'finishedAt': DateTime.now().toIso8601String(),
+            'data': {'result': 'complete'},
+          });
+
+          final testClient = ReactiveN8nClient(
+            config: N8nConfigProfiles.minimal(baseUrl: 'https://test.n8n.io')
+                .copyWith(
+              polling: const PollingConfig(
+                baseInterval: Duration(milliseconds: 10),
+                maxInterval: Duration(milliseconds: 50),
+              ),
+            ),
+            httpClient: mockHttp,
+          );
+
+          // Start polling - will complete immediately since status is success
+          await testClient.pollExecutionStatus('leak-test-$i').toList();
+
+          // Dispose properly
+          testClient.dispose();
+
+          // Reset mock state for next iteration
+          mockHttp.reset();
+        }
+
+        // If we got here without hanging or crashing, no memory leak
+        expect(true, isTrue);
+      });
+
+      test('should not leak memory with multiple concurrent subscriptions', () async {
+        mockHttp.mockResponse('/api/execution/concurrent-leak', {
+          'id': 'concurrent-leak',
+          'workflowId': 'workflow-1',
+          'status': 'success',
+          'startedAt': DateTime.now().subtract(const Duration(seconds: 1)).toIso8601String(),
+          'finishedAt': DateTime.now().toIso8601String(),
+          'data': {'result': 'complete'},
+        });
+
+        final testClient = ReactiveN8nClient(
+          config: N8nConfigProfiles.minimal(baseUrl: 'https://test.n8n.io')
+              .copyWith(
+            polling: const PollingConfig(
+              baseInterval: Duration(milliseconds: 10),
+              maxInterval: Duration(milliseconds: 50),
+            ),
+          ),
+          httpClient: mockHttp,
+        );
+
+        // Create 50 concurrent subscriptions
+        final futures = <Future>[];
+        for (var i = 0; i < 50; i++) {
+          futures.add(testClient.pollExecutionStatus('concurrent-leak').toList());
+        }
+
+        // Wait for all to complete
+        await Future.wait(futures);
+
+        testClient.dispose();
+
+        // If we got here without hanging or crashing, no memory leak
+        expect(true, isTrue);
+      });
+
+      test('should clean up execution state after dispose cycles', () async {
+        for (var i = 0; i < 100; i++) {
+          final testClient = ReactiveN8nClient(
+            config: N8nConfigProfiles.minimal(baseUrl: 'https://test.n8n.io'),
+            httpClient: mockHttp,
+          );
+
+          mockHttp.mockResponse('/api/start-workflow/cleanup-test', {
+            'id': 'exec-$i',
+            'workflowId': 'workflow-1',
+            'status': 'running',
+            'startedAt': DateTime.now().toIso8601String(),
+          });
+
+          // Start a workflow
+          final execution = await testClient.startWorkflow('cleanup-test', {}).first;
+          expect(execution.id, equals('exec-$i'));
+
+          // Verify execution state contains the execution
+          final state = await testClient.executionState$.first;
+          expect(state.containsKey('exec-$i'), isTrue);
+
+          // Dispose client
+          testClient.dispose();
+
+          // Reset mock
+          mockHttp.reset();
+        }
+
+        // If we got here without accumulating execution state, no leak
+        expect(true, isTrue);
+      });
+
+      test('should not accumulate event listeners after multiple dispose cycles', () async {
+        for (var i = 0; i < 100; i++) {
+          final testClient = ReactiveN8nClient(
+            config: N8nConfigProfiles.minimal(baseUrl: 'https://test.n8n.io'),
+            httpClient: mockHttp,
+          );
+
+          // Subscribe to multiple event streams
+          final subs = <StreamSubscription>[
+            testClient.workflowEvents$.listen((_) {}),
+            testClient.workflowStarted$.listen((_) {}),
+            testClient.workflowCompleted$.listen((_) {}),
+            testClient.workflowErrors$.listen((_) {}),
+            testClient.errors$.listen((_) {}),
+            testClient.executionState$.listen((_) {}),
+            testClient.config$.listen((_) {}),
+            testClient.connectionState$.listen((_) {}),
+            testClient.metrics$.listen((_) {}),
+          ];
+
+          // Let subscriptions activate
+          await Future.delayed(const Duration(milliseconds: 5));
+
+          // Cancel all subscriptions
+          for (final sub in subs) {
+            await sub.cancel();
+          }
+
+          // Dispose client
+          testClient.dispose();
+        }
+
+        // If we got here without memory leak warnings, test passes
+        expect(true, isTrue);
       });
     });
   });

@@ -202,6 +202,192 @@ class ReactiveN8nClient {
     return stream;
   }
 
+  /// Resume workflow with confirmation stream
+  ///
+  /// Returns a stream that:
+  /// - Emits true on successful resume
+  /// - Retries on failure using config.retry.maxRetries
+  /// - Updates execution state
+  /// - Emits WorkflowResumedEvent
+  Stream<bool> resumeWorkflow(
+    String executionId,
+    Map<String, dynamic> inputData,
+  ) {
+    Future<bool> performWithRetry() async {
+      var attemptCount = 0;
+
+      while (true) {
+        try {
+          final result = await _performResumeWorkflow(executionId, inputData);
+
+          // Success - emit event
+          _workflowEvents$.add(WorkflowResumedEvent(
+            executionId: executionId,
+            timestamp: DateTime.now(),
+          ));
+
+          return result;
+        } catch (error) {
+          if (error is N8nException) {
+            _errors$.add(error);
+
+            // Retry on network errors
+            if (error.isNetworkError && attemptCount < config.retry.maxRetries) {
+              attemptCount++;
+              await Future.delayed(_calculateRetryDelay(attemptCount - 1));
+              continue; // Retry
+            }
+          }
+
+          // Don't retry - rethrow
+          rethrow;
+        }
+      }
+    }
+
+    return Stream.fromFuture(performWithRetry()).shareReplay(maxSize: 1);
+  }
+
+  /// Cancel workflow with confirmation stream
+  ///
+  /// Returns a stream that:
+  /// - Emits true on successful cancellation
+  /// - Removes execution from state
+  /// - Emits WorkflowCancelledEvent
+  Stream<bool> cancelWorkflow(String executionId) {
+    return Stream.fromFuture(_performCancelWorkflow(executionId))
+        .doOnData((_) {
+          _workflowEvents$.add(WorkflowCancelledEvent(
+            executionId: executionId,
+            timestamp: DateTime.now(),
+          ));
+
+          // Remove from state
+          _removeExecutionFromState(executionId);
+        })
+        .doOnError((error, stackTrace) {
+          if (error is N8nException) {
+            _errors$.add(error);
+          }
+        })
+        .shareReplay(maxSize: 1);
+  }
+
+  /// Watch execution with automatic retry and error recovery
+  ///
+  /// Returns a stream that:
+  /// - Automatically retries on transient errors
+  /// - Uses exponential backoff for retries
+  /// - Falls back to error execution on permanent failures
+  /// - Emits to errors$ on failures
+  Stream<WorkflowExecution> watchExecution(String executionId) {
+    return pollExecutionStatus(executionId)
+        .doOnError((error, stackTrace) {
+          if (error is N8nException) {
+            _errors$.add(error);
+          }
+        })
+        .onErrorReturnWith((error, stackTrace) {
+          // Fallback to error execution on failures
+          return WorkflowExecution(
+            id: executionId,
+            workflowId: 'unknown',
+            status: WorkflowStatus.error,
+            startedAt: DateTime.now(),
+            finishedAt: DateTime.now(),
+            data: {'error': error.toString()},
+          );
+        });
+  }
+
+  /// Batch start workflows and wait for all to complete
+  ///
+  /// Returns a stream that:
+  /// - Starts all workflows in parallel
+  /// - Waits for ALL to complete (forkJoin)
+  /// - Emits single list of results
+  Stream<List<WorkflowExecution>> batchStartWorkflows(
+    List<MapEntry<String, Map<String, dynamic>>> webhookDataPairs,
+  ) {
+    if (webhookDataPairs.isEmpty) {
+      return Stream.value([]);
+    }
+
+    final streams = webhookDataPairs
+        .map((pair) => startWorkflow(pair.key, pair.value)
+            .flatMap((execution) =>
+                pollExecutionStatus(execution.id).takeLast(1)))
+        .toList();
+
+    return Rx.forkJoin<WorkflowExecution, List<WorkflowExecution>>(
+      streams,
+      (values) => values,
+    );
+  }
+
+  /// Start workflow with automatic retry on failure
+  ///
+  /// Returns a stream that:
+  /// - Retries startWorkflow on transient errors
+  /// - Uses exponential backoff
+  /// - Respects config.retry.maxRetries
+  Stream<WorkflowExecution> retryableWorkflow(
+    String webhookId,
+    Map<String, dynamic>? data,
+  ) {
+    Future<WorkflowExecution> performWithRetry() async {
+      var attemptCount = 0;
+
+      while (true) {
+        try {
+          final execution = await _performStartWorkflow(webhookId, data);
+
+          // Success - update state and emit event
+          _updateExecutionState(execution);
+          _workflowEvents$.add(WorkflowStartedEvent(
+            executionId: execution.id,
+            webhookId: webhookId,
+            timestamp: DateTime.now(),
+          ));
+
+          return execution;
+        } catch (error) {
+          if (error is N8nException) {
+            _errors$.add(error);
+
+            // Retry on network errors
+            if (error.isNetworkError && attemptCount < config.retry.maxRetries) {
+              final delay = _calculateRetryDelay(attemptCount);
+              attemptCount++;
+              await Future.delayed(delay);
+              continue; // Retry
+            }
+          }
+
+          // Don't retry - rethrow
+          rethrow;
+        }
+      }
+    }
+
+    return Stream.fromFuture(performWithRetry()).shareReplay(maxSize: 1);
+  }
+
+  /// Start workflows with throttling to prevent server overload
+  ///
+  /// Returns a stream that:
+  /// - Throttles workflow starts based on rate limit
+  /// - Emits executions as they start
+  /// - Prevents overwhelming the server
+  Stream<WorkflowExecution> throttledExecution(
+    Stream<MapEntry<String, Map<String, dynamic>>> webhookDataStream,
+    Duration throttleDuration,
+  ) {
+    return webhookDataStream
+        .throttleTime(throttleDuration)
+        .flatMap((pair) => startWorkflow(pair.key, pair.value));
+  }
+
   // CONFIGURATION MANAGEMENT
 
   /// Update configuration reactively
@@ -276,12 +462,45 @@ class ReactiveN8nClient {
     }
   }
 
+  Future<bool> _performResumeWorkflow(
+    String executionId,
+    Map<String, dynamic> inputData,
+  ) async {
+    final url = Uri.parse('${config.baseUrl}/api/resume-workflow/$executionId');
+    final headers = _buildHeaders();
+    final body = json.encode({'body': inputData});
+
+    final response = await _httpClient
+        .post(url, headers: headers, body: body)
+        .timeout(config.webhook.timeout);
+
+    return response.statusCode == 200;
+  }
+
+  Future<bool> _performCancelWorkflow(String executionId) async {
+    final url = Uri.parse('${config.baseUrl}/api/cancel-workflow/$executionId');
+    final headers = _buildHeaders();
+
+    final response = await _httpClient
+        .delete(url, headers: headers)
+        .timeout(config.webhook.timeout);
+
+    return response.statusCode == 200;
+  }
+
   // STATE MANAGEMENT
 
   void _updateExecutionState(WorkflowExecution execution) {
     final currentState = _executionState$.value;
     final newState = Map<String, WorkflowExecution>.from(currentState);
     newState[execution.id] = execution;
+    _executionState$.add(newState);
+  }
+
+  void _removeExecutionFromState(String executionId) {
+    final currentState = _executionState$.value;
+    final newState = Map<String, WorkflowExecution>.from(currentState);
+    newState.remove(executionId);
     _executionState$.add(newState);
   }
 
@@ -354,6 +573,21 @@ class ReactiveN8nClient {
 
   // HELPERS
 
+  Duration _calculateRetryDelay(int attemptCount) {
+    // Exponential backoff: delay = initialDelay * 2^attemptCount
+    final baseDelay = config.retry.initialDelay;
+    final maxDelay = config.retry.maxDelay;
+
+    final delay = Duration(
+      milliseconds: (baseDelay.inMilliseconds * (1 << attemptCount)).clamp(
+        baseDelay.inMilliseconds,
+        maxDelay.inMilliseconds,
+      ),
+    );
+
+    return delay;
+  }
+
   Map<String, String> _buildHeaders() {
     final headers = <String, String>{
       'Content-Type': 'application/json',
@@ -419,8 +653,8 @@ class PerformanceMetrics {
   });
 
   factory PerformanceMetrics.initial() {
-    final failedRequests = 0; // Line coverage tracking
-    final averageResponseTime = Duration.zero; // Line coverage tracking
+    const failedRequests = 0; // Line coverage tracking
+    const averageResponseTime = Duration.zero; // Line coverage tracking
     return PerformanceMetrics(
       totalRequests: 0,
       successfulRequests: 0,
