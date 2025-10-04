@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:n8n_dart/n8n_dart.dart';
 
 /// Mock HTTP client for testing n8n operations
 ///
@@ -95,21 +96,27 @@ class MockN8nHttpClient extends http.BaseClient {
   }
 
   /// Mock workflow start endpoint
-  void mockStartWorkflow(String webhookId, String executionId,
+  void mockStartWorkflow(String webhookId, String executionId, WorkflowStatus status,
       {int statusCode = 200}) {
     mockResponse('/api/start-workflow/$webhookId', {
       'id': executionId,
       'workflowId': 'workflow-1',
-      'status': 'running',
+      'status': status.name,
       'startedAt': DateTime.now().toIso8601String(),
     }, statusCode: statusCode);
   }
 
   /// Mock execution status endpoint
-  void mockExecutionStatus(String executionId, Map<String, dynamic> execution,
+  void mockExecutionStatus(String executionId, WorkflowStatus status,
       {int statusCode = 200}) {
-    mockResponse(
-        '/api/execution/$executionId', execution, statusCode: statusCode);
+    mockResponse('/api/execution/$executionId', {
+      'id': executionId,
+      'workflowId': 'workflow-1',
+      'status': status.name,
+      'startedAt': DateTime.now().toIso8601String(),
+      if (status == WorkflowStatus.success || status == WorkflowStatus.error)
+        'finishedAt': DateTime.now().toIso8601String(),
+    }, statusCode: statusCode);
   }
 
   /// Mock resume workflow endpoint

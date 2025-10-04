@@ -16,6 +16,8 @@ dependencies:
   rxdart: ^0.28.0
   # Annotations and meta programming
   meta: ^1.10.0
+  # UUID generation for queue items
+  uuid: ^4.5.1
 
 dev_dependencies:
   # Testing framework

@@ -81,9 +81,13 @@ export 'src/core/models/n8n_models.dart';
 export 'src/core/services/n8n_client.dart';
 export 'src/core/services/polling_manager.dart';
 export 'src/core/services/reactive_error_handler.dart';
+export 'src/core/services/reactive_execution_cache.dart';
 export 'src/core/services/reactive_n8n_client.dart';
+export 'src/core/services/reactive_polling_manager.dart';
+export 'src/core/services/reactive_workflow_queue.dart';
 export 'src/core/services/stream_recovery.dart';
 // Workflow Generator
 export 'src/workflow_generator/models/workflow_models.dart';
+export 'src/workflow_generator/reactive_workflow_builder.dart';
 export 'src/workflow_generator/templates/workflow_templates.dart';
 export 'src/workflow_generator/workflow_builder.dart';

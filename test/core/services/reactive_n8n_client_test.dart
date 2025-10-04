@@ -997,7 +997,7 @@ void main() {
 
         test('should remove execution from state', () async {
           // First add execution to state
-          mockHttp.mockStartWorkflow('webhook-123', 'exec-123');
+          mockHttp.mockStartWorkflow('webhook-123', 'exec-123', WorkflowStatus.running);
           await client.startWorkflow('webhook-123', {}).first;
 
           // Verify it's in state
@@ -1027,7 +1027,7 @@ void main() {
 
       group('watchExecution()', () {
         test('should poll and return execution status', () async {
-          mockHttp.mockExecutionStatus('exec-123', {
+          mockHttp.mockResponse('/api/execution/exec-123', {
             'id': 'exec-123',
             'workflowId': 'workflow-1',
             'status': 'success',
@@ -1084,25 +1084,25 @@ void main() {
 
       group('batchStartWorkflows()', () {
         test('should start multiple workflows in parallel and wait for all', () async {
-          mockHttp.mockStartWorkflow('webhook-1', 'exec-1');
-          mockHttp.mockStartWorkflow('webhook-2', 'exec-2');
-          mockHttp.mockStartWorkflow('webhook-3', 'exec-3');
+          mockHttp.mockStartWorkflow('webhook-1', 'exec-1', WorkflowStatus.running);
+          mockHttp.mockStartWorkflow('webhook-2', 'exec-2', WorkflowStatus.running);
+          mockHttp.mockStartWorkflow('webhook-3', 'exec-3', WorkflowStatus.running);
 
-          mockHttp.mockExecutionStatus('exec-1', {
+          mockHttp.mockResponse('/api/execution/exec-1', {
             'id': 'exec-1',
             'workflowId': 'workflow-1',
             'status': 'success',
             'startedAt': DateTime.now().toIso8601String(),
             'finishedAt': DateTime.now().toIso8601String(),
           });
-          mockHttp.mockExecutionStatus('exec-2', {
+          mockHttp.mockResponse('/api/execution/exec-2', {
             'id': 'exec-2',
             'workflowId': 'workflow-1',
             'status': 'success',
             'startedAt': DateTime.now().toIso8601String(),
             'finishedAt': DateTime.now().toIso8601String(),
           });
-          mockHttp.mockExecutionStatus('exec-3', {
+          mockHttp.mockResponse('/api/execution/exec-3', {
             'id': 'exec-3',
             'workflowId': 'workflow-1',
             'status': 'success',
@@ -1132,11 +1132,11 @@ void main() {
         });
 
         test('should wait for all executions to complete', () async {
-          mockHttp.mockStartWorkflow('webhook-1', 'exec-1');
-          mockHttp.mockStartWorkflow('webhook-2', 'exec-2');
+          mockHttp.mockStartWorkflow('webhook-1', 'exec-1', WorkflowStatus.running);
+          mockHttp.mockStartWorkflow('webhook-2', 'exec-2', WorkflowStatus.running);
 
           // Mock finished executions (no polling needed)
-          mockHttp.mockExecutionStatus('exec-1', {
+          mockHttp.mockResponse('/api/execution/exec-1', {
             'id': 'exec-1',
             'workflowId': 'workflow-1',
             'status': 'success',
@@ -1144,7 +1144,7 @@ void main() {
             'finishedAt': DateTime.now().toIso8601String(),
           });
 
-          mockHttp.mockExecutionStatus('exec-2', {
+          mockHttp.mockResponse('/api/execution/exec-2', {
             'id': 'exec-2',
             'workflowId': 'workflow-1',
             'status': 'success',
@@ -1237,7 +1237,7 @@ void main() {
         });
 
         test('should emit WorkflowStartedEvent on successful start', () async {
-          mockHttp.mockStartWorkflow('webhook-123', 'exec-456');
+          mockHttp.mockStartWorkflow('webhook-123', 'exec-456', WorkflowStatus.running);
 
           final events = <WorkflowEvent>[];
           client.workflowEvents$.listen(events.add);
@@ -1266,7 +1266,7 @@ void main() {
         });
 
         test('should support multiple subscribers (shareReplay)', () async {
-          mockHttp.mockStartWorkflow('webhook-123', 'exec-456');
+          mockHttp.mockStartWorkflow('webhook-123', 'exec-456', WorkflowStatus.running);
 
           final stream = client.retryableWorkflow('webhook-123', {'data': 'test'});
 
@@ -1319,7 +1319,7 @@ void main() {
         });
 
         test('should emit executions as they start', () async {
-          mockHttp.mockStartWorkflow('webhook-123', 'exec-1');
+          mockHttp.mockStartWorkflow('webhook-123', 'exec-1', WorkflowStatus.running);
 
           final dataStream = Stream.fromIterable([
             const MapEntry('webhook-123', {'data': '1'}),
@@ -1575,8 +1575,8 @@ void main() {
 
         test('should maintain order of executions', () async {
           // Mock responses with delays to test ordering
-          mockHttp.mockStartWorkflow('webhook-fast', 'exec-fast');
-          mockHttp.mockStartWorkflow('webhook-slow', 'exec-slow');
+          mockHttp.mockStartWorkflow('webhook-fast', 'exec-fast', WorkflowStatus.running);
+          mockHttp.mockStartWorkflow('webhook-slow', 'exec-slow', WorkflowStatus.running);
 
           mockHttp.mockResponse('/api/execution/exec-fast', {
             'id': 'exec-fast',
@@ -1675,8 +1675,8 @@ void main() {
       group('raceWorkflows()', () {
         test('should emit result from fastest workflow', () async {
           // Mock fast and slow workflows
-          mockHttp.mockStartWorkflow('webhook-fast', 'exec-fast');
-          mockHttp.mockStartWorkflow('webhook-slow', 'exec-slow');
+          mockHttp.mockStartWorkflow('webhook-fast', 'exec-fast', WorkflowStatus.running);
+          mockHttp.mockStartWorkflow('webhook-slow', 'exec-slow', WorkflowStatus.running);
 
           // Fast execution completes immediately
           mockHttp.mockResponse('/api/execution/exec-fast', {
@@ -1714,8 +1714,8 @@ void main() {
         });
 
         test('should complete when first workflow finishes', () async {
-          mockHttp.mockStartWorkflow('webhook-1', 'exec-1');
-          mockHttp.mockStartWorkflow('webhook-2', 'exec-2');
+          mockHttp.mockStartWorkflow('webhook-1', 'exec-1', WorkflowStatus.running);
+          mockHttp.mockStartWorkflow('webhook-2', 'exec-2', WorkflowStatus.running);
 
           // First execution completes quickly
           mockHttp.mockResponse('/api/execution/exec-1', {
@@ -1748,8 +1748,8 @@ void main() {
         });
 
         test('should handle errors and emit first successful result', () async {
-          mockHttp.mockStartWorkflow('webhook-success', 'exec-success');
-          mockHttp.mockStartWorkflow('webhook-backup', 'exec-backup');
+          mockHttp.mockStartWorkflow('webhook-success', 'exec-success', WorkflowStatus.running);
+          mockHttp.mockStartWorkflow('webhook-backup', 'exec-backup', WorkflowStatus.running);
 
           // Success execution completes immediately
           mockHttp.mockResponse('/api/execution/exec-success', {
@@ -1783,8 +1783,8 @@ void main() {
       group('Integration - Complex Workflow Patterns', () {
         test('should handle sequential then batch pattern', () async {
           // Sequential phase
-          mockHttp.mockStartWorkflow('webhook-seq-1', 'exec-seq-1');
-          mockHttp.mockStartWorkflow('webhook-seq-2', 'exec-seq-2');
+          mockHttp.mockStartWorkflow('webhook-seq-1', 'exec-seq-1', WorkflowStatus.running);
+          mockHttp.mockStartWorkflow('webhook-seq-2', 'exec-seq-2', WorkflowStatus.running);
 
           mockHttp.mockResponse('/api/execution/exec-seq-1', {
             'id': 'exec-seq-1',
@@ -1814,8 +1814,8 @@ void main() {
           expect(sequentialResults, hasLength(2));
 
           // Then batch phase
-          mockHttp.mockStartWorkflow('webhook-batch-1', 'exec-batch-1');
-          mockHttp.mockStartWorkflow('webhook-batch-2', 'exec-batch-2');
+          mockHttp.mockStartWorkflow('webhook-batch-1', 'exec-batch-1', WorkflowStatus.running);
+          mockHttp.mockStartWorkflow('webhook-batch-2', 'exec-batch-2', WorkflowStatus.running);
 
           mockHttp.mockResponse('/api/execution/exec-batch-1', {
             'id': 'exec-batch-1',
@@ -1842,8 +1842,8 @@ void main() {
         });
 
         test('should handle race with fallback pattern', () async {
-          mockHttp.mockStartWorkflow('webhook-primary', 'exec-primary');
-          mockHttp.mockStartWorkflow('webhook-backup', 'exec-backup');
+          mockHttp.mockStartWorkflow('webhook-primary', 'exec-primary', WorkflowStatus.running);
+          mockHttp.mockStartWorkflow('webhook-backup', 'exec-backup', WorkflowStatus.running);
 
           // Primary completes first
           mockHttp.mockResponse('/api/execution/exec-primary', {
@@ -1904,7 +1904,7 @@ void main() {
           const count = 50;
 
           for (var i = 0; i < count; i++) {
-            mockHttp.mockStartWorkflow('webhook-$i', 'exec-$i');
+            mockHttp.mockStartWorkflow('webhook-$i', 'exec-$i', WorkflowStatus.running);
             mockHttp.mockResponse('/api/execution/exec-$i', {
               'id': 'exec-$i',
               'workflowId': 'workflow-1',
@@ -1926,8 +1926,8 @@ void main() {
 
       group('Throughput Metrics', () {
         test('should track metrics for batch operations', () async {
-          mockHttp.mockStartWorkflow('webhook-1', 'exec-1');
-          mockHttp.mockStartWorkflow('webhook-2', 'exec-2');
+          mockHttp.mockStartWorkflow('webhook-1', 'exec-1', WorkflowStatus.running);
+          mockHttp.mockStartWorkflow('webhook-2', 'exec-2', WorkflowStatus.running);
 
           mockHttp.mockResponse('/api/execution/exec-1', {
             'id': 'exec-1',
@@ -1961,7 +1961,7 @@ void main() {
         });
 
         test('should calculate success rate correctly', () async {
-          mockHttp.mockStartWorkflow('webhook-success', 'exec-success');
+          mockHttp.mockStartWorkflow('webhook-success', 'exec-success', WorkflowStatus.running);
           mockHttp.onRequest('/api/start-workflow/webhook-error', () {
             throw N8nException.serverError('Server error', statusCode: 500);
           });

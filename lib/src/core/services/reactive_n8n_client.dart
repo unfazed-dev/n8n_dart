@@ -431,6 +431,52 @@ class ReactiveN8nClient {
     return Rx.race(streams);
   }
 
+  /// Zip multiple workflow executions (combine latest from each when all have emitted)
+  ///
+  /// Returns a stream that:
+  /// - Monitors multiple executions in parallel
+  /// - Emits tuple when ALL executions have updated
+  /// - Combines emissions with zipWith operator
+  /// - Useful for coordinating dependent workflows
+  Stream<List<WorkflowExecution>> zipWorkflows(
+    List<String> executionIds,
+  ) {
+    if (executionIds.isEmpty) {
+      return Stream.value([]);
+    }
+
+    if (executionIds.length == 1) {
+      return pollExecutionStatus(executionIds[0]).map((e) => [e]);
+    }
+
+    // Create streams for each execution
+    final streams = executionIds.map(pollExecutionStatus).toList();
+
+    // Use Rx.zip to combine all streams
+    return Rx.zip<WorkflowExecution, List<WorkflowExecution>>(
+      streams,
+      (values) => values,
+    );
+  }
+
+  /// Watch multiple executions and emit whenever ANY completes
+  ///
+  /// Returns a stream that:
+  /// - Monitors multiple executions
+  /// - Emits each execution as it completes (merge)
+  /// - All executions run in parallel
+  Stream<WorkflowExecution> watchMultipleExecutions(
+    List<String> executionIds,
+  ) {
+    if (executionIds.isEmpty) {
+      return const Stream.empty();
+    }
+
+    final streams = executionIds.map(pollExecutionStatus).toList();
+
+    return Rx.merge(streams);
+  }
+
   // CONFIGURATION MANAGEMENT
 
   /// Update configuration reactively
