@@ -5,6 +5,8 @@
 
 Production-ready Dart package for **n8n workflow automation** integration. Works with both pure Dart applications and Flutter mobile/web apps.
 
+**🎉 NEW in v1.1.0:** Fully reactive API with RxDart streams, comprehensive documentation suite, and 422 passing tests!
+
 ## ✨ Features
 
 ### Core Features
@@ -39,7 +41,7 @@ Add to your `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  n8n_dart: ^1.0.0
+  n8n_dart: ^1.1.0
 ```
 
 Then run:

@@ -1,6 +1,6 @@
 name: n8n_dart
 description: Production-ready Dart package for n8n workflow automation integration. Supports both pure Dart and Flutter applications with reactive programming, smart polling, and dynamic form generation.
-version: 1.0.0
+version: 1.1.0
 repository: https://github.com/yourusername/n8n_dart
 homepage: https://github.com/yourusername/n8n_dart
 documentation: https://pub.dev/documentation/n8n_dart/latest/
@@ -34,6 +34,9 @@ dev_dependencies:
 
   # Linting
   lints: ^3.0.0
+
+  # Environment variable management for integration tests
+  dotenv: ^4.2.0
 
 # Explicitly exclude Flutter dependencies from core package
 # Flutter integration is available via separate import
