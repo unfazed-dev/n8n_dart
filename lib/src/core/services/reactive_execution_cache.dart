@@ -25,10 +25,15 @@ class ReactiveExecutionCache {
       BehaviorSubject.seeded({});
   final PublishSubject<String> _invalidation$ = PublishSubject();
   final PublishSubject<CacheEvent> _events$ = PublishSubject();
+  final BehaviorSubject<CacheMetrics> _metrics$ =
+      BehaviorSubject.seeded(CacheMetrics.initial());
   final Duration _ttl;
   final Duration _cleanupInterval;
 
   Timer? _cleanupTimer;
+  StreamSubscription<CacheEvent>? _eventSubscription;
+  int _hitCount = 0;
+  int _missCount = 0;
 
   ReactiveExecutionCache({
     required ReactiveN8nClient client,
@@ -38,6 +43,27 @@ class ReactiveExecutionCache {
         _ttl = ttl,
         _cleanupInterval = cleanupInterval {
     _startPeriodicCleanup();
+    _subscribeToEvents();
+  }
+
+  /// Subscribe to cache events and update metrics
+  void _subscribeToEvents() {
+    _eventSubscription = _events$.listen((event) {
+      if (event is CacheHitEvent) {
+        _hitCount++;
+      } else if (event is CacheMissEvent) {
+        _missCount++;
+      }
+
+      if (!_metrics$.isClosed) {
+        _metrics$.add(CacheMetrics(
+          hitCount: _hitCount,
+          missCount: _missCount,
+          cacheSize: _cache$.value.length,
+          timestamp: DateTime.now(),
+        ));
+      }
+    });
   }
 
   /// Stream of cache state
@@ -56,25 +82,7 @@ class ReactiveExecutionCache {
   Stream<CacheMissEvent> get cacheMisses$ => _events$.whereType<CacheMissEvent>();
 
   /// Stream of cache metrics
-  Stream<CacheMetrics> get metrics$ {
-    var totalHits = 0;
-    var totalMisses = 0;
-
-    return _events$.scan<CacheMetrics>(
-      (accumulated, event, index) {
-        if (event is CacheHitEvent) totalHits++;
-        if (event is CacheMissEvent) totalMisses++;
-
-        return CacheMetrics(
-          hitCount: totalHits,
-          missCount: totalMisses,
-          cacheSize: _cache$.value.length,
-          timestamp: DateTime.now(),
-        );
-      },
-      CacheMetrics.initial(),
-    );
-  }
+  Stream<CacheMetrics> get metrics$ => _metrics$.stream;
 
   /// Watch cached execution with auto-refresh on invalidation
   ///
@@ -153,8 +161,16 @@ class ReactiveExecutionCache {
 
   /// Invalidate specific execution
   ///
-  /// Triggers refetch for any watchers
+  /// Triggers refetch for any watchers and removes from cache
   void invalidate(String executionId) {
+    // Remove from cache
+    final current = _cache$.value;
+    if (current.containsKey(executionId)) {
+      final updated = Map<String, CachedExecution>.from(current);
+      updated.remove(executionId);
+      _cache$.add(updated);
+    }
+
     _invalidation$.add(executionId);
     _events$.add(CacheInvalidatedEvent(executionId: executionId));
   }
@@ -259,9 +275,11 @@ class ReactiveExecutionCache {
   /// Dispose resources
   void dispose() {
     _cleanupTimer?.cancel();
+    _eventSubscription?.cancel();
     _cache$.close();
     _invalidation$.close();
     _events$.close();
+    _metrics$.close();
   }
 }
 

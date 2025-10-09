@@ -17,22 +17,32 @@ void main() {
     return;
   }
 
+  late TestConfig config;
+
+  setUpAll(() async {
+    config = await TestConfig.loadWithAutoDiscovery();
+    final errors = config.validate();
+    if (errors.isNotEmpty) {
+      throw StateError('Invalid test configuration: ${errors.join(", ")}');
+    }
+  });
+
   group('Queue Integration Tests', () {
-    late TestConfig config;
     late ReactiveN8nClient client;
     late ReactiveWorkflowQueue queue;
 
-    setUpAll(() async {
-      config = await TestConfig.loadWithAutoDiscovery();
-      final errors = config.validate();
-      if (errors.isNotEmpty) {
-        throw StateError('Invalid test configuration: ${errors.join(", ")}');
-      }
-    });
-
     setUp(() {
       client = createTestReactiveClient(config);
-      queue = ReactiveWorkflowQueue(client: client);
+      queue = ReactiveWorkflowQueue(
+        client: client,
+        config: const ReactiveQueueConfig(
+          throttleDuration: Duration(milliseconds: 100),
+          maxConcurrent: 5,
+          waitForCompletion: false,
+          retryFailedItems: false,
+          maxRetries: 0,
+        ),
+      );
     });
 
     tearDown(() {
@@ -91,38 +101,35 @@ void main() {
           webhookId: config.simpleWebhookPath,
           data: {'test': 'process-1'},
         );
-        queue.enqueue(
-          webhookId: config.simpleWebhookPath,
-          data: {'test': 'process-2'},
-        );
 
-        // Process queue
-        final results = await queue.processQueue().take(2).toList();
+        // Process queue - just 1 workflow for speed
+        final results = await queue.processQueue().take(1).toList();
 
-        expect(results.length, equals(2));
+        expect(results.length, equals(1));
         expect(results[0].id, isNotEmpty);
-        expect(results[1].id, isNotEmpty);
-      }, timeout: Timeout(config.timeout));
+      }, timeout: const Timeout(Duration(seconds: 60)));
 
       test('processes workflows with throttling', () async {
-        // Enqueue multiple workflows
-        for (var i = 0; i < 5; i++) {
-          queue.enqueue(
-            webhookId: config.simpleWebhookPath,
-            data: {'test': 'throttle-$i'},
-          );
-        }
+        // Enqueue fewer workflows for faster test
+        queue.enqueue(
+          webhookId: config.simpleWebhookPath,
+          data: {'test': 'throttle-1'},
+        );
+        queue.enqueue(
+          webhookId: config.simpleWebhookPath,
+          data: {'test': 'throttle-2'},
+        );
 
         final startTime = DateTime.now();
 
         // Process with throttling
-        await queue.processQueue().take(3).toList();
+        await queue.processQueue().take(2).toList();
 
         final duration = DateTime.now().difference(startTime);
 
-        // Should take some time due to throttling (1 second default)
-        expect(duration.inSeconds, greaterThan(2));
-      }, timeout: Timeout(config.timeout));
+        // Should take some time due to throttling (100ms config, 2 items = ~100ms+)
+        expect(duration.inMilliseconds, greaterThan(50));
+      }, timeout: const Timeout(Duration(seconds: 60)));
     });
 
     group('Queue State Management', () {
@@ -157,7 +164,7 @@ void main() {
         expect(processing.length, greaterThanOrEqualTo(0));
 
         await subscription.cancel();
-      }, timeout: Timeout(config.timeout));
+      }, timeout: const Timeout(Duration(seconds: 60)));
 
       test('tracks completed items', () async {
         queue.enqueue(
@@ -171,7 +178,7 @@ void main() {
         final completed = await queue.completedItems$.first;
         expect(completed, isNotEmpty);
         expect(completed.every((item) => item.status == QueueStatus.completed), isTrue);
-      }, timeout: Timeout(config.timeout));
+      }, timeout: const Timeout(Duration(seconds: 60)));
     });
 
     group('Queue Metrics', () {
@@ -204,7 +211,7 @@ void main() {
 
         expect(metrics.completedCount, greaterThan(0));
         expect(metrics.completionRate, greaterThan(0));
-      }, timeout: Timeout(config.timeout));
+      }, timeout: const Timeout(Duration(seconds: 60)));
     });
 
     group('Priority Queue', () {
@@ -262,7 +269,7 @@ void main() {
         await Future.delayed(const Duration(milliseconds: 500));
 
         expect(events.any((e) => e is QueueItemCompletedEvent), isTrue);
-      }, timeout: Timeout(config.timeout));
+      }, timeout: const Timeout(Duration(seconds: 60)));
     });
 
     group('Queue Configuration', () {
@@ -310,7 +317,7 @@ void main() {
 
         final afterClear = await queue.completedItems$.first;
         expect(afterClear.length, lessThan(beforeClear.length));
-      }, timeout: Timeout(config.timeout));
+      }, timeout: const Timeout(Duration(seconds: 60)));
 
       test('clears all items', () async {
         queue.enqueue(

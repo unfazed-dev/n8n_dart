@@ -194,22 +194,28 @@ class TestConfig {
       return value.toLowerCase() == 'true';
     }
 
+    // Helper to get string with default
+    String getString(String key, String defaultValue) {
+      final value = env[key];
+      return (value == null || value.isEmpty) ? defaultValue : value;
+    }
+
     return TestConfig(
       // n8n Cloud Configuration
       baseUrl: getRequired('N8N_BASE_URL'),
       apiKey: getOptional('N8N_API_KEY'),
 
-      // Test Workflow IDs
-      simpleWorkflowId: getRequired('N8N_SIMPLE_WORKFLOW_ID'),
-      waitNodeWorkflowId: getRequired('N8N_WAIT_NODE_WORKFLOW_ID'),
-      slowWorkflowId: getRequired('N8N_SLOW_WORKFLOW_ID'),
-      errorWorkflowId: getRequired('N8N_ERROR_WORKFLOW_ID'),
+      // Test Workflow IDs (default to 'auto' for auto-discovery)
+      simpleWorkflowId: getString('N8N_SIMPLE_WORKFLOW_ID', 'auto'),
+      waitNodeWorkflowId: getString('N8N_WAIT_NODE_WORKFLOW_ID', 'auto'),
+      slowWorkflowId: getString('N8N_SLOW_WORKFLOW_ID', 'auto'),
+      errorWorkflowId: getString('N8N_ERROR_WORKFLOW_ID', 'auto'),
 
-      // Test Webhook Paths
-      simpleWebhookPath: getRequired('N8N_SIMPLE_WEBHOOK_PATH'),
-      waitNodeWebhookPath: getRequired('N8N_WAIT_NODE_WEBHOOK_PATH'),
-      slowWebhookPath: getRequired('N8N_SLOW_WEBHOOK_PATH'),
-      errorWebhookPath: getRequired('N8N_ERROR_WEBHOOK_PATH'),
+      // Test Webhook Paths (default paths for auto-discovery)
+      simpleWebhookPath: getString('N8N_SIMPLE_WEBHOOK_PATH', 'test/simple'),
+      waitNodeWebhookPath: getString('N8N_WAIT_NODE_WEBHOOK_PATH', 'test/wait-node'),
+      slowWebhookPath: getString('N8N_SLOW_WEBHOOK_PATH', 'test/slow'),
+      errorWebhookPath: getString('N8N_ERROR_WEBHOOK_PATH', 'test/error'),
 
       // Test Configuration
       timeoutSeconds: getInt('TEST_TIMEOUT_SECONDS', 300),

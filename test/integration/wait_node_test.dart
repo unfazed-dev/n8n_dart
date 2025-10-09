@@ -89,8 +89,7 @@ void main() {
       final waitingExecution = await waitForWaitingState(
         client,
         executionId,
-        timeout: config.timeout,
-        pollInterval: config.pollingInterval,
+        timeout: const Duration(seconds: 300),
       );
 
       // Assert
@@ -99,7 +98,7 @@ void main() {
           reason: 'Execution should have waiting status');
       expect(waitingExecution.waitNodeData, isNotNull,
           reason: 'Wait node data should be present');
-    }, timeout: Timeout(config.timeout));
+    }, timeout: const Timeout(Duration(seconds: 300)));
 
     test('should not set waitingForInput for non-wait workflows', () async {
       // Arrange
@@ -116,8 +115,7 @@ void main() {
       final completed = await waitForExecutionCompletion(
         client,
         executionId,
-        timeout: config.timeout,
-        pollInterval: config.pollingInterval,
+        timeout: const Duration(seconds: 300),
       );
 
       // Assert
@@ -126,7 +124,7 @@ void main() {
       expect(completed.waitNodeData, isNull,
           reason: 'Wait node data should be null for non-wait workflows');
       IntegrationAssertions.assertSuccessfulExecution(completed);
-    }, timeout: Timeout(config.timeout));
+    }, timeout: const Timeout(Duration(seconds: 300)));
 
     test('should maintain waiting state until resumed', () async {
       // Arrange
@@ -143,8 +141,7 @@ void main() {
       final waitingExecution = await waitForWaitingState(
         client,
         executionId,
-        timeout: config.timeout,
-        pollInterval: config.pollingInterval,
+        timeout: const Duration(seconds: 300),
       );
 
       // Poll multiple times to verify state is maintained
@@ -157,7 +154,7 @@ void main() {
           reason: 'Status should remain unchanged');
       expect(stillWaiting.waitingForInput, isTrue,
           reason: 'Should still be waiting for input');
-    }, timeout: Timeout(config.timeout));
+    }, timeout: const Timeout(Duration(seconds: 300)));
   });
 
   group('Form Field Parsing', () {
@@ -175,8 +172,7 @@ void main() {
       final waitingExecution = await waitForWaitingState(
         client,
         executionId,
-        timeout: config.timeout,
-        pollInterval: config.pollingInterval,
+        timeout: const Duration(seconds: 300),
       );
 
       // Assert - Verify form fields are parsed
@@ -194,7 +190,7 @@ void main() {
             reason: 'Field label should not be empty');
         expect(field.type, isNotNull, reason: 'Field type should be set');
       }
-    }, timeout: Timeout(config.timeout));
+    }, timeout: const Timeout(Duration(seconds: 300)));
 
     test('should correctly identify required vs optional fields', () async {
       // Arrange
@@ -210,8 +206,7 @@ void main() {
       final waitingExecution = await waitForWaitingState(
         client,
         executionId,
-        timeout: config.timeout,
-        pollInterval: config.pollingInterval,
+        timeout: const Duration(seconds: 300),
       );
 
       // Assert - Verify required field detection
@@ -234,7 +229,7 @@ void main() {
         expect(requiredField.required, isTrue,
             reason: 'Required field should be marked as required');
       }
-    }, timeout: Timeout(config.timeout));
+    }, timeout: const Timeout(Duration(seconds: 300)));
 
     test('should parse form field types correctly', () async {
       // Arrange
@@ -250,8 +245,7 @@ void main() {
       final waitingExecution = await waitForWaitingState(
         client,
         executionId,
-        timeout: config.timeout,
-        pollInterval: config.pollingInterval,
+        timeout: const Duration(seconds: 300),
       );
 
       // Assert - Verify field types are valid
@@ -288,7 +282,7 @@ void main() {
           reason: 'Field type should be one of the supported types',
         );
       }
-    }, timeout: Timeout(config.timeout));
+    }, timeout: const Timeout(Duration(seconds: 300)));
   });
 
   group('Workflow Resumption', () {
@@ -306,8 +300,7 @@ void main() {
       await waitForWaitingState(
         client,
         executionId,
-        timeout: config.timeout,
-        pollInterval: config.pollingInterval,
+        timeout: const Duration(seconds: 300),
       );
 
       // Resume with form data
@@ -326,15 +319,14 @@ void main() {
       final completed = await waitForExecutionCompletion(
         client,
         executionId,
-        timeout: config.timeout,
-        pollInterval: config.pollingInterval,
+        timeout: const Duration(seconds: 300),
       );
 
       // Verify workflow completed successfully
       IntegrationAssertions.assertSuccessfulExecution(completed);
       expect(completed.waitingForInput, isFalse,
           reason: 'Should no longer be waiting after resume');
-    }, timeout: Timeout(config.timeout));
+    }, timeout: const Timeout(Duration(seconds: 300)));
 
     test('should complete workflow successfully after resumption', () async {
       // Arrange
@@ -350,8 +342,7 @@ void main() {
       await waitForWaitingState(
         client,
         executionId,
-        timeout: config.timeout,
-        pollInterval: config.pollingInterval,
+        timeout: const Duration(seconds: 300),
       );
 
       // Resume workflow
@@ -365,8 +356,7 @@ void main() {
       final completed = await waitForExecutionCompletion(
         client,
         executionId,
-        timeout: config.timeout,
-        pollInterval: config.pollingInterval,
+        timeout: const Duration(seconds: 300),
       );
 
       // Assert - Workflow should complete successfully
@@ -378,7 +368,7 @@ void main() {
           reason: 'Finished flag should be true');
       expect(completed.finishedAt, isNotNull,
           reason: 'Finished timestamp should be set');
-    }, timeout: Timeout(config.timeout));
+    }, timeout: const Timeout(Duration(seconds: 300)));
   });
 
   group('Invalid Form Data Handling', () {
@@ -396,8 +386,7 @@ void main() {
       await waitForWaitingState(
         client,
         executionId,
-        timeout: config.timeout,
-        pollInterval: config.pollingInterval,
+        timeout: const Duration(seconds: 300),
       );
 
       // Attempt to resume with invalid email
@@ -418,7 +407,7 @@ void main() {
         // Invalid data may cause n8n to reject the request
         expect(e, isNotNull, reason: 'Should throw N8nException');
       }
-    }, timeout: Timeout(config.timeout));
+    }, timeout: const Timeout(Duration(seconds: 300)));
 
     test('should handle resume with missing required fields', () async {
       // Arrange
@@ -434,8 +423,7 @@ void main() {
       final waitingExecution = await waitForWaitingState(
         client,
         executionId,
-        timeout: config.timeout,
-        pollInterval: config.pollingInterval,
+        timeout: const Duration(seconds: 300),
       );
 
       // Identify required fields
@@ -464,7 +452,7 @@ void main() {
         expect(e.message, isNotEmpty,
             reason: 'Exception should have error message');
       }
-    }, timeout: Timeout(config.timeout));
+    }, timeout: const Timeout(Duration(seconds: 300)));
 
     test('should validate form data before resume attempt', () async {
       // Arrange
@@ -480,8 +468,7 @@ void main() {
       final waitingExecution = await waitForWaitingState(
         client,
         executionId,
-        timeout: config.timeout,
-        pollInterval: config.pollingInterval,
+        timeout: const Duration(seconds: 300),
       );
 
       // Get wait node data for validation
@@ -507,7 +494,7 @@ void main() {
         expect(resumed, isTrue,
             reason: 'Resume should succeed with valid data');
       }
-    }, timeout: Timeout(config.timeout));
+    }, timeout: const Timeout(Duration(seconds: 300)));
   });
 
   group('Error Handling', () {

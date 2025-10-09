@@ -4,7 +4,7 @@
   "version": 1.0,
   "nodes": [
     {
-      "id": "1760001702183_523",
+      "id": "1760004018599_523",
       "name": "Schedule Trigger",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1,
@@ -24,7 +24,7 @@
       }
     },
     {
-      "id": "1760001702183_524",
+      "id": "1760004018599_524",
       "name": "Fetch Data",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 1,
@@ -44,7 +44,7 @@
       }
     },
     {
-      "id": "1760001702183_525",
+      "id": "1760004018599_525",
       "name": "Generate Report",
       "type": "n8n-nodes-base.function",
       "typeVersion": 1,
@@ -57,7 +57,7 @@
       }
     },
     {
-      "id": "1760001702183_526",
+      "id": "1760004018599_526",
       "name": "Send Report",
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 1,

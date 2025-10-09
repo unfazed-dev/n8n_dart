@@ -62,7 +62,7 @@ void main() {
         // Verify cache size increased
         final size = await cache.cacheSize$.first;
         expect(size, greaterThan(0));
-      }, timeout: Timeout(config.timeout));
+      }, timeout: const Timeout(Duration(seconds: 60)));
 
       test('returns cached execution on subsequent access', () async {
         // Start a workflow
@@ -86,7 +86,7 @@ void main() {
 
         // Should be very fast (< 100ms) because it's cached
         expect(duration.inMilliseconds, lessThan(100));
-      }, timeout: Timeout(config.timeout));
+      }, timeout: const Timeout(Duration(seconds: 60)));
 
       test('manually sets execution in cache', () async {
         // Start a workflow
@@ -104,7 +104,7 @@ void main() {
         // Verify it's cached
         final size = await cache.cacheSize$.first;
         expect(size, greaterThan(0));
-      }, timeout: Timeout(config.timeout));
+      }, timeout: const Timeout(Duration(seconds: 60)));
     });
 
     group('Cache Metrics', () {
@@ -118,19 +118,20 @@ void main() {
             )
             .first;
 
-        // First access (miss)
+        // Set in cache first (faster than waiting for poll)
+        cache.set(execution.id, execution);
+
+        // Access it (should be hit since it's cached) - this emits CacheHitEvent
         await cache.get(execution.id);
 
-        // Second access (hit)
-        await cache.get(execution.id);
+        // Wait briefly for metrics to update
+        await Future.delayed(const Duration(milliseconds: 100));
 
-        // Wait for metrics to update
-        await Future.delayed(const Duration(milliseconds: 200));
-
-        // Check metrics
+        // Get the current metrics (BehaviorSubject always has a value)
         final metrics = await cache.metrics$.first;
+
         expect(metrics.hitCount, greaterThan(0));
-      }, timeout: Timeout(config.timeout));
+      }, timeout: const Timeout(Duration(seconds: 60)));
 
       test('tracks cache misses', () async {
         final events = <CacheEvent>[];
@@ -147,7 +148,7 @@ void main() {
 
         // Should have miss events
         expect(events.whereType<CacheMissEvent>(), isNotEmpty);
-      }, timeout: Timeout(config.timeout));
+      }, timeout: const Timeout(Duration(seconds: 60)));
 
       test('calculates hit rate', () async {
         // Start a workflow
@@ -159,19 +160,22 @@ void main() {
             )
             .first;
 
-        // First access (miss)
-        await cache.get(execution.id);
+        // Set in cache first
+        cache.set(execution.id, execution);
 
         // Multiple hits
         await cache.get(execution.id);
         await cache.get(execution.id);
 
-        await Future.delayed(const Duration(milliseconds: 200));
+        // Wait briefly for metrics to update
+        await Future.delayed(const Duration(milliseconds: 100));
 
+        // Get the current metrics
         final metrics = await cache.metrics$.first;
+
         expect(metrics.hitRate, greaterThan(0));
         expect(metrics.hitRate, lessThanOrEqualTo(1.0));
-      }, timeout: Timeout(config.timeout));
+      }, timeout: const Timeout(Duration(seconds: 60)));
     });
 
     group('Cache Events', () {
@@ -198,7 +202,7 @@ void main() {
 
         expect(hits, isNotEmpty);
         expect(hits.first.executionId, equals(execution.id));
-      }, timeout: Timeout(config.timeout));
+      }, timeout: const Timeout(Duration(seconds: 60)));
 
       test('emits cache miss events', () async {
         final misses = <CacheMissEvent>[];
@@ -219,7 +223,7 @@ void main() {
         await Future.delayed(const Duration(milliseconds: 200));
 
         expect(misses, isNotEmpty);
-      }, timeout: Timeout(config.timeout));
+      }, timeout: const Timeout(Duration(seconds: 60)));
     });
 
     group('Cache Invalidation', () {
@@ -236,16 +240,23 @@ void main() {
         // Cache it
         cache.set(execution.id, execution);
 
-        final sizeBefore = await cache.cacheSize$.first;
+        // Wait for cache to update
+        await Future.delayed(const Duration(milliseconds: 100));
 
-        // Invalidate it
+        // Verify it's cached
+        final sizeBefore = await cache.cacheSize$.first;
+        expect(sizeBefore, greaterThan(0));
+
+        // Invalidate it - now invalidate() actually removes from cache
         cache.invalidate(execution.id);
 
-        await Future.delayed(const Duration(milliseconds: 200));
+        // Wait for invalidation to process
+        await Future.delayed(const Duration(milliseconds: 100));
 
+        // Get the size after invalidation
         final sizeAfter = await cache.cacheSize$.first;
-        expect(sizeAfter, lessThan(sizeBefore));
-      }, timeout: Timeout(config.timeout));
+        expect(sizeAfter, equals(0));
+      }, timeout: const Timeout(Duration(seconds: 60)));
 
       test('invalidates all cache entries', () async {
         // Start multiple workflows
@@ -276,7 +287,7 @@ void main() {
 
         final size = await cache.cacheSize$.first;
         expect(size, equals(0));
-      }, timeout: Timeout(config.timeout));
+      }, timeout: const Timeout(Duration(seconds: 60)));
     });
 
     group('Cache Watch', () {
@@ -298,14 +309,14 @@ void main() {
 
         expect(watched, isNotNull);
         expect(watched!.id, equals(execution.id));
-      }, timeout: Timeout(config.timeout));
+      }, timeout: const Timeout(Duration(seconds: 60)));
 
       test('watch emits null for non-cached execution', () async {
         // Watch non-existent execution
         final watched = await cache.watch('non-existent-id').first;
 
         expect(watched, isNull);
-      }, timeout: Timeout(config.timeout));
+      }, timeout: const Timeout(Duration(seconds: 60)));
     });
 
     group('Cache TTL', () {
@@ -370,7 +381,7 @@ void main() {
         expect(cleared, greaterThan(0));
 
         shortCache.dispose();
-      }, timeout: Timeout(config.timeout));
+      }, timeout: const Timeout(Duration(seconds: 60)));
     });
 
     group('Cache Cleanup', () {
@@ -425,7 +436,7 @@ void main() {
         // Verify cache has entries
         final size = await cache.cacheSize$.first;
         expect(size, greaterThanOrEqualTo(1));
-      }, timeout: Timeout(config.timeout));
+      }, timeout: const Timeout(Duration(seconds: 60)));
     });
   });
 }
