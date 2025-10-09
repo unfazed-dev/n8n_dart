@@ -4,7 +4,7 @@
   "version": 1.0,
   "nodes": [
     {
-      "id": "1760003021936_30",
+      "id": "1760001702170_351",
       "name": "Order Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1,
@@ -13,13 +13,13 @@
         200.0
       ],
       "parameters": {
-        "path": "orders/process",
+        "path": "orders",
         "method": "POST",
         "authentication": "none"
       }
     },
     {
-      "id": "1760003021936_31",
+      "id": "1760001702170_352",
       "name": "Calculate Total",
       "type": "n8n-nodes-base.function",
       "typeVersion": 1,
@@ -32,7 +32,7 @@
       }
     },
     {
-      "id": "1760003021936_32",
+      "id": "1760001702170_353",
       "name": "Process Payment",
       "type": "n8n-nodes-base.stripe",
       "typeVersion": 1,
@@ -54,7 +54,7 @@
       }
     },
     {
-      "id": "1760003021936_33",
+      "id": "1760001702170_354",
       "name": "Payment Success?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 1,
@@ -73,7 +73,7 @@
       }
     },
     {
-      "id": "1760003021936_34",
+      "id": "1760001702170_355",
       "name": "Save Order",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 1,
@@ -93,7 +93,7 @@
       }
     },
     {
-      "id": "1760003021936_35",
+      "id": "1760001702170_356",
       "name": "Send Confirmation",
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 1,
@@ -109,7 +109,7 @@
       }
     },
     {
-      "id": "1760003021936_36",
+      "id": "1760001702170_357",
       "name": "Send Error Email",
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 1,
@@ -125,7 +125,7 @@
       }
     },
     {
-      "id": "1760003021936_37",
+      "id": "1760001702170_358",
       "name": "Return Response",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,

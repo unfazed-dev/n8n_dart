@@ -1,0 +1,108 @@
+{
+  "name": "AI Chatbot API",
+  "active": false,
+  "version": 1.0,
+  "nodes": [
+    {
+      "id": "1760001702211_896",
+      "name": "Chat Endpoint",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        100.0,
+        200.0
+      ],
+      "parameters": {
+        "path": "chat",
+        "method": "POST",
+        "authentication": "none"
+      }
+    },
+    {
+      "id": "1760001702211_897",
+      "name": "Parse Input",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        350.0,
+        200.0
+      ],
+      "parameters": {
+        "functionCode": "const body = $input.item.json.body;\nconst message = body.message || '';\nconst sessionId = body.sessionId || 'default-session';\nconst context = body.context || {};\n\nreturn [{\n  json: {\n    message: message,\n    sessionId: sessionId,\n    context: context,\n    timestamp: new Date().toISOString()\n  }\n}];\n"
+      }
+    },
+    {
+      "id": "1760001702211_898",
+      "name": "AI Response",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        600.0,
+        200.0
+      ],
+      "parameters": {
+        "functionCode": "// Note: In actual n8n workflow, use AI Agent node here\n// This is a placeholder for the n8n_dart package\nconst message = $json.message;\nconst sessionId = $json.sessionId;\n\n// Simulated AI response structure\nreturn [{\n  json: {\n    output: \"AI response to: \" + message,\n    sessionId: sessionId,\n    timestamp: new Date().toISOString(),\n    model: 'gpt-3.5-turbo'\n  }\n}];\n"
+      }
+    },
+    {
+      "id": "1760001702211_899",
+      "name": "Send Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        850.0,
+        200.0
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseCode": 200
+      }
+    }
+  ],
+  "connections": {
+    "Chat Endpoint": {
+      "main": [
+        [
+          {
+            "node": "Parse Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Input": {
+      "main": [
+        [
+          {
+            "node": "AI Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Response": {
+      "main": [
+        [
+          {
+            "node": "Send Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionMode": "sequential",
+    "timezone": "UTC"
+  },
+  "tags": [
+    "ai",
+    "chat",
+    "webhook",
+    "api",
+    "langchain"
+  ]
+}

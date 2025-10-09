@@ -1,10 +1,10 @@
 {
-  "name": "Scheduled Sales Report",
+  "name": "Scheduled Weekly Sales Report",
   "active": false,
   "version": 1.0,
   "nodes": [
     {
-      "id": "1760003021939_59",
+      "id": "1760001702183_523",
       "name": "Schedule Trigger",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1,
@@ -24,7 +24,7 @@
       }
     },
     {
-      "id": "1760003021939_60",
+      "id": "1760001702183_524",
       "name": "Fetch Data",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 1,
@@ -44,7 +44,7 @@
       }
     },
     {
-      "id": "1760003021939_61",
+      "id": "1760001702183_525",
       "name": "Generate Report",
       "type": "n8n-nodes-base.function",
       "typeVersion": 1,
@@ -57,7 +57,7 @@
       }
     },
     {
-      "id": "1760003021939_62",
+      "id": "1760001702183_526",
       "name": "Send Report",
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 1,
@@ -68,7 +68,7 @@
       "parameters": {
         "fromEmail": "reports@example.com",
         "toEmail": "team@example.com",
-        "subject": "Weekly Sales Report",
+        "subject": "Weekly Weekly Sales Report",
         "message": "={{$json.reportHtml}}"
       }
     }

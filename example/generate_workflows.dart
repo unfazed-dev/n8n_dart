@@ -2,12 +2,20 @@
 ///
 /// This example demonstrates how to use the n8n_dart workflow generator
 /// to create n8n workflow JSON files that can be imported into n8n.
+///
+/// The generator now supports automatic credential loading from .env files!
 
 import 'dart:io';
 import 'package:n8n_dart/n8n_dart.dart';
 
+// Global credential manager instance
+late CredentialManager credManager;
+
 void main() async {
   print('🚀 n8n Workflow Generator Examples\n');
+
+  // Initialize credential manager
+  credManager = _initializeCredentials();
 
   // Create output directory
   final outputDir = Directory('generated_workflows');
@@ -76,6 +84,55 @@ void main() async {
   print('   5. Activate the workflow\n');
 }
 
+/// Initialize credential manager from .env file
+CredentialManager _initializeCredentials() {
+  print('🔐 Loading credentials...\n');
+
+  CredentialManager manager;
+
+  // Try to load from .env.test first, then .env
+  final envTestFile = File('.env.test');
+  final envFile = File('.env');
+
+  if (envTestFile.existsSync()) {
+    print('   ✓ Found .env.test file');
+    manager = CredentialManager.fromEnvFile('.env.test');
+  } else if (envFile.existsSync()) {
+    print('   ✓ Found .env file');
+    manager = CredentialManager.fromEnvFile('.env');
+  } else {
+    print('   ⚠️  No .env file found - using placeholder credentials');
+    print('   💡 Create .env.test with your credentials for automatic setup\n');
+    manager = CredentialManager();
+  }
+
+  // Print credential status
+  manager.printStatus();
+  print('');
+
+  return manager;
+}
+
+/// Save workflow with credential injection
+Future<void> _saveWorkflowWithCredentials(
+  N8nWorkflow workflow,
+  String filePath,
+) async {
+  // Inject real credentials from .env
+  final injector = WorkflowCredentialInjector(credManager);
+  final workflowWithCreds = injector.injectCredentials(workflow);
+
+  // Check if any placeholders remain
+  if (injector.hasPlaceholderCredentials(workflowWithCreds)) {
+    final required = injector.getRequiredCredentials(workflowWithCreds);
+    print('   ⚠️  Missing credentials: ${required.join(', ')}');
+    print('   💡 Add these to .env.test for automatic configuration');
+  }
+
+  // Save to file
+  await workflowWithCreds.saveToFile(filePath);
+}
+
 /// Example 1: Simple webhook that saves data to PostgreSQL
 Future<void> example1SimpleWebhookToDb(String outputPath) async {
   print('📝 Example 1: Simple Webhook → Database');
@@ -130,8 +187,11 @@ return [{
       ])
       .build();
 
-  // Save to file
-  await workflow.saveToFile('$outputPath/01_simple_webhook_to_db.json');
+  // Save to file with credentials
+  await _saveWorkflowWithCredentials(
+    workflow,
+    '$outputPath/01_simple_webhook_to_db.json',
+  );
   print('   ✓ Generated: 01_simple_webhook_to_db.json\n');
 }
 

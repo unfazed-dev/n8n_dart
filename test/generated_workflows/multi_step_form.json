@@ -1,11 +1,11 @@
 {
-  "name": "Multi-Step Onboarding Form",
+  "name": "Multi-Step Form Workflow",
   "active": false,
   "version": 1.0,
   "nodes": [
     {
-      "id": "1760003021934_14",
-      "name": "Start Onboarding",
+      "id": "1760001702177_463",
+      "name": "Start Form",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1,
       "position": [
@@ -13,14 +13,14 @@
         200.0
       ],
       "parameters": {
-        "path": "onboarding/start",
+        "path": "form/start",
         "method": "POST",
         "authentication": "none"
       }
     },
     {
-      "id": "1760003021934_15",
-      "name": "Initialize Session",
+      "id": "1760001702177_464",
+      "name": "Initialize Form",
       "type": "n8n-nodes-base.function",
       "typeVersion": 1,
       "position": [
@@ -28,12 +28,12 @@
         200.0
       ],
       "parameters": {
-        "functionCode": "const { userId } = $input.item.json.body;\n\nreturn [{\n  json: {\n    sessionId: 'SESSION-' + Date.now(),\n    userId,\n    step1: $input.item.json.body,\n    createdAt: new Date().toISOString()\n  }\n}];\n"
+        "functionCode": "return [{\n  json: {\n    formId: 'FORM-' + Date.now(),\n    step1Data: $input.item.json.body\n  }\n}];\n"
       }
     },
     {
-      "id": "1760003021934_16",
-      "name": "Wait for Personal Info",
+      "id": "1760001702177_465",
+      "name": "Wait for Step 2",
       "type": "n8n-nodes-base.wait",
       "typeVersion": 1,
       "position": [
@@ -45,8 +45,8 @@
       }
     },
     {
-      "id": "1760003021934_17",
-      "name": "Process Personal Info",
+      "id": "1760001702177_466",
+      "name": "Process Step 2",
       "type": "n8n-nodes-base.function",
       "typeVersion": 1,
       "position": [
@@ -54,12 +54,12 @@
         200.0
       ],
       "parameters": {
-        "functionCode": "return [{\n  json: {\n    ...$input.item.json,\n    step2_personal: $input.item.json.body\n  }\n}];\n"
+        "functionCode": "return [{\n  json: {\n    ...$input.item.json,\n    step2Data: $input.item.json.body\n  }\n}];\n"
       }
     },
     {
-      "id": "1760003021934_18",
-      "name": "Wait for Preferences",
+      "id": "1760001702177_467",
+      "name": "Wait for Step 3",
       "type": "n8n-nodes-base.wait",
       "typeVersion": 1,
       "position": [
@@ -71,8 +71,8 @@
       }
     },
     {
-      "id": "1760003021934_19",
-      "name": "Process Preferences",
+      "id": "1760001702177_468",
+      "name": "Process Step 3",
       "type": "n8n-nodes-base.function",
       "typeVersion": 1,
       "position": [
@@ -80,12 +80,12 @@
         200.0
       ],
       "parameters": {
-        "functionCode": "return [{\n  json: {\n    ...$input.item.json,\n    step3_preferences: $input.item.json.body,\n    completedAt: new Date().toISOString()\n  }\n}];\n"
+        "functionCode": "return [{\n  json: {\n    ...$input.item.json,\n    step3Data: $input.item.json.body,\n    completedAt: new Date().toISOString()\n  }\n}];\n"
       }
     },
     {
-      "id": "1760003021934_20",
-      "name": "Save Onboarding Data",
+      "id": "1760001702177_469",
+      "name": "Save Form Data",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 1,
       "position": [
@@ -94,7 +94,7 @@
       ],
       "parameters": {
         "operation": "insert",
-        "table": "onboarding_sessions"
+        "table": "forms"
       },
       "credentials": {
         "postgres": {
@@ -104,123 +104,96 @@
       }
     },
     {
-      "id": "1760003021934_21",
-      "name": "Send Welcome Email",
-      "type": "n8n-nodes-base.emailSend",
+      "id": "1760001702177_470",
+      "name": "Send Completion",
+      "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
       "position": [
         1850.0,
         200.0
       ],
       "parameters": {
-        "fromEmail": "welcome@example.com",
-        "toEmail": "={{$json.step2_personal.email}}",
-        "subject": "Welcome! Your account is ready",
-        "message": "Thanks for completing onboarding!"
-      }
-    },
-    {
-      "id": "1760003021934_22",
-      "name": "Return Completion",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1,
-      "position": [
-        2100.0,
-        200.0
-      ],
-      "parameters": {
         "respondWith": "json",
         "responseCode": 200,
         "responseBody": {
-          "message": "Onboarding completed",
-          "sessionId": "={{$json.sessionId}}"
+          "message": "Form completed successfully",
+          "formId": "={{$json.formId}}"
         }
       }
     }
   ],
   "connections": {
-    "Start Onboarding": {
+    "Start Form": {
       "main": [
         [
           {
-            "node": "Initialize Session",
+            "node": "Initialize Form",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Initialize Session": {
+    "Initialize Form": {
       "main": [
         [
           {
-            "node": "Wait for Personal Info",
+            "node": "Wait for Step 2",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Wait for Personal Info": {
+    "Wait for Step 2": {
       "main": [
         [
           {
-            "node": "Process Personal Info",
+            "node": "Process Step 2",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Process Personal Info": {
+    "Process Step 2": {
       "main": [
         [
           {
-            "node": "Wait for Preferences",
+            "node": "Wait for Step 3",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Wait for Preferences": {
+    "Wait for Step 3": {
       "main": [
         [
           {
-            "node": "Process Preferences",
+            "node": "Process Step 3",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Process Preferences": {
+    "Process Step 3": {
       "main": [
         [
           {
-            "node": "Save Onboarding Data",
+            "node": "Save Form Data",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Save Onboarding Data": {
+    "Save Form Data": {
       "main": [
         [
           {
-            "node": "Send Welcome Email",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Send Welcome Email": {
-      "main": [
-        [
-          {
-            "node": "Return Completion",
+            "node": "Send Completion",
             "type": "main",
             "index": 0
           }

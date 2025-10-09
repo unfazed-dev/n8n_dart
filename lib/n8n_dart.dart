@@ -91,4 +91,6 @@ export 'src/core/services/stream_recovery.dart';
 export 'src/workflow_generator/models/workflow_models.dart';
 export 'src/workflow_generator/reactive_workflow_builder.dart';
 export 'src/workflow_generator/templates/workflow_templates.dart';
+export 'src/workflow_generator/utils/credential_manager.dart';
+export 'src/workflow_generator/utils/workflow_credential_injector.dart';
 export 'src/workflow_generator/workflow_builder.dart';

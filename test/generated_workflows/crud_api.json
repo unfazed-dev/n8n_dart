@@ -1,10 +1,10 @@
 {
-  "name": "PRODUCTS CRUD API",
+  "name": "USERS CRUD API",
   "active": false,
   "version": 1.0,
   "nodes": [
     {
-      "id": "1760003021935_23",
+      "id": "1760001702140_85",
       "name": "Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1,
@@ -13,13 +13,13 @@
         200.0
       ],
       "parameters": {
-        "path": "api/v1/products",
+        "path": "api/users/users",
         "method": "POST",
         "authentication": "none"
       }
     },
     {
-      "id": "1760003021935_24",
+      "id": "1760001702140_86",
       "name": "Route Request",
       "type": "n8n-nodes-base.function",
       "typeVersion": 1,
@@ -32,8 +32,8 @@
       }
     },
     {
-      "id": "1760003021935_25",
-      "name": "Create products",
+      "id": "1760001702140_87",
+      "name": "Create users",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 1,
       "position": [
@@ -42,7 +42,7 @@
       ],
       "parameters": {
         "operation": "insert",
-        "table": "products"
+        "table": "users"
       },
       "credentials": {
         "postgres": {
@@ -52,8 +52,8 @@
       }
     },
     {
-      "id": "1760003021935_26",
-      "name": "Read products",
+      "id": "1760001702140_88",
+      "name": "Read users",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 1,
       "position": [
@@ -62,7 +62,7 @@
       ],
       "parameters": {
         "operation": "select",
-        "table": "products"
+        "table": "users"
       },
       "credentials": {
         "postgres": {
@@ -72,8 +72,8 @@
       }
     },
     {
-      "id": "1760003021935_27",
-      "name": "Update products",
+      "id": "1760001702140_89",
+      "name": "Update users",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 1,
       "position": [
@@ -82,7 +82,7 @@
       ],
       "parameters": {
         "operation": "update",
-        "table": "products"
+        "table": "users"
       },
       "credentials": {
         "postgres": {
@@ -92,8 +92,8 @@
       }
     },
     {
-      "id": "1760003021935_28",
-      "name": "Delete products",
+      "id": "1760001702140_90",
+      "name": "Delete users",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 1,
       "position": [
@@ -102,7 +102,7 @@
       ],
       "parameters": {
         "operation": "delete",
-        "table": "products"
+        "table": "users"
       },
       "credentials": {
         "postgres": {
@@ -112,7 +112,7 @@
       }
     },
     {
-      "id": "1760003021935_29",
+      "id": "1760001702140_91",
       "name": "Send Response",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
@@ -142,29 +142,29 @@
       "main": [
         [
           {
-            "node": "Create products",
+            "node": "Create users",
             "type": "main",
             "index": 0
           },
           {
-            "node": "Read products",
+            "node": "Read users",
             "type": "main",
             "index": 0
           },
           {
-            "node": "Update products",
+            "node": "Update users",
             "type": "main",
             "index": 0
           },
           {
-            "node": "Delete products",
+            "node": "Delete users",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Create products": {
+    "Create users": {
       "main": [
         [
           {
@@ -175,7 +175,7 @@
         ]
       ]
     },
-    "Read products": {
+    "Read users": {
       "main": [
         [
           {
@@ -186,7 +186,7 @@
         ]
       ]
     },
-    "Update products": {
+    "Update users": {
       "main": [
         [
           {
@@ -197,7 +197,7 @@
         ]
       ]
     },
-    "Delete products": {
+    "Delete users": {
       "main": [
         [
           {

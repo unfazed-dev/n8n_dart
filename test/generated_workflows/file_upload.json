@@ -4,7 +4,7 @@
   "version": 1.0,
   "nodes": [
     {
-      "id": "1760003021937_38",
+      "id": "1760001702162_243",
       "name": "Upload Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1,
@@ -13,13 +13,13 @@
         200.0
       ],
       "parameters": {
-        "path": "files/upload",
+        "path": "upload",
         "method": "POST",
         "authentication": "none"
       }
     },
     {
-      "id": "1760003021937_39",
+      "id": "1760001702162_244",
       "name": "Extract File Data",
       "type": "n8n-nodes-base.function",
       "typeVersion": 1,
@@ -32,7 +32,7 @@
       }
     },
     {
-      "id": "1760003021937_40",
+      "id": "1760001702162_245",
       "name": "Upload to S3",
       "type": "n8n-nodes-base.awsS3",
       "typeVersion": 1,
@@ -42,7 +42,7 @@
       ],
       "parameters": {
         "operation": "upload",
-        "bucketName": "my-app-uploads"
+        "bucketName": "my-test-bucket"
       },
       "credentials": {
         "aws": {
@@ -52,7 +52,7 @@
       }
     },
     {
-      "id": "1760003021937_41",
+      "id": "1760001702162_246",
       "name": "Save Metadata",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 1,
@@ -72,7 +72,7 @@
       }
     },
     {
-      "id": "1760003021937_42",
+      "id": "1760001702162_247",
       "name": "Notify Team",
       "type": "n8n-nodes-base.slack",
       "typeVersion": 1,
@@ -92,7 +92,7 @@
       }
     },
     {
-      "id": "1760003021938_43",
+      "id": "1760001702162_248",
       "name": "Return Success",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,

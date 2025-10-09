@@ -4,7 +4,7 @@
   "version": 1.0,
   "nodes": [
     {
-      "id": "1759506004767_99",
+      "id": "1760003021944_99",
       "name": "Booking Request",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1,
@@ -19,7 +19,7 @@
       }
     },
     {
-      "id": "1759506004767_100",
+      "id": "1760003021944_100",
       "name": "Validate Request",
       "type": "n8n-nodes-base.function",
       "typeVersion": 1,
@@ -32,7 +32,7 @@
       }
     },
     {
-      "id": "1759506004767_101",
+      "id": "1760003021944_101",
       "name": "Check Availability",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 1,
@@ -52,7 +52,7 @@
       }
     },
     {
-      "id": "1759506004767_102",
+      "id": "1760003021944_102",
       "name": "Slot Available?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 1,
@@ -71,7 +71,7 @@
       }
     },
     {
-      "id": "1759506004767_103",
+      "id": "1760003021944_103",
       "name": "Return Unavailable",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
@@ -90,7 +90,7 @@
       }
     },
     {
-      "id": "1759506004767_104",
+      "id": "1760003021944_104",
       "name": "Generate Booking ID",
       "type": "n8n-nodes-base.function",
       "typeVersion": 1,
@@ -103,7 +103,7 @@
       }
     },
     {
-      "id": "1759506004767_105",
+      "id": "1760003021944_105",
       "name": "Save Booking",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 1,
@@ -123,7 +123,7 @@
       }
     },
     {
-      "id": "1759506004767_106",
+      "id": "1760003021944_106",
       "name": "Send Confirmation Email",
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 1,
@@ -139,7 +139,7 @@
       }
     },
     {
-      "id": "1759506004767_107",
+      "id": "1760003021944_107",
       "name": "Prepare SMS",
       "type": "n8n-nodes-base.function",
       "typeVersion": 1,
@@ -152,7 +152,7 @@
       }
     },
     {
-      "id": "1759506004767_108",
+      "id": "1760003021944_108",
       "name": "Notify Team",
       "type": "n8n-nodes-base.slack",
       "typeVersion": 1,
@@ -172,7 +172,7 @@
       }
     },
     {
-      "id": "1759506004767_109",
+      "id": "1760003021944_109",
       "name": "Return Success",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,

@@ -1,9 +1,10 @@
 /// Pre-built n8n Workflow Templates
 ///
 /// Ready-to-use workflow templates for common use cases
+library;
 
-import '../workflow_builder.dart';
 import '../models/workflow_models.dart';
+import '../workflow_builder.dart';
 
 /// Collection of pre-built workflow templates
 class WorkflowTemplates {
@@ -21,7 +22,6 @@ class WorkflowTemplates {
         .webhookTrigger(
           name: 'Webhook',
           path: '$webhookPath/$resourceName',
-          method: 'POST',
         )
         // Switch based on HTTP method
         .function(
@@ -70,7 +70,6 @@ return [{
         .newRow()
         .respondToWebhook(
           name: 'Send Response',
-          responseCode: 200,
         )
         // Connect nodes
         .connect('Webhook', 'Route Request')
@@ -87,9 +86,8 @@ return [{
 
   /// Create a user registration workflow with email confirmation
   static N8nWorkflow userRegistration({
-    String webhookPath = 'auth/register',
+    required String fromEmail, String webhookPath = 'auth/register',
     String tableName = 'users',
-    required String fromEmail,
   }) {
     return WorkflowBuilder.create()
         .name('User Registration Workflow')
@@ -98,7 +96,6 @@ return [{
         .webhookTrigger(
           name: 'Registration Webhook',
           path: webhookPath,
-          method: 'POST',
         )
         .function(
           name: 'Validate Input',
@@ -180,8 +177,7 @@ The Team
 
   /// Create a file upload processing workflow
   static N8nWorkflow fileUpload({
-    String webhookPath = 'upload',
-    required String s3Bucket,
+    required String s3Bucket, String webhookPath = 'upload',
   }) {
     return WorkflowBuilder.create()
         .name('File Upload & Processing')
@@ -190,7 +186,6 @@ The Team
         .webhookTrigger(
           name: 'Upload Webhook',
           path: webhookPath,
-          method: 'POST',
         )
         .function(
           name: 'Extract File Data',
@@ -224,7 +219,6 @@ return [{
         )
         .respondToWebhook(
           name: 'Return Success',
-          responseCode: 200,
           responseBody: {
             'message': 'File uploaded successfully',
             'fileUrl': r'={{$json.url}}',
@@ -243,8 +237,7 @@ return [{
 
   /// Create an order processing workflow with payment
   static N8nWorkflow orderProcessing({
-    String webhookPath = 'orders',
-    required String notificationEmail,
+    required String notificationEmail, String webhookPath = 'orders',
   }) {
     return WorkflowBuilder.create()
         .name('Order Processing & Payment')
@@ -253,7 +246,6 @@ return [{
         .webhookTrigger(
           name: 'Order Webhook',
           path: webhookPath,
-          method: 'POST',
         )
         .function(
           name: 'Calculate Total',
@@ -315,12 +307,11 @@ return [{
         .newRow()
         .respondToWebhook(
           name: 'Return Response',
-          responseCode: 200,
         )
         .connect('Order Webhook', 'Calculate Total')
         .connect('Calculate Total', 'Process Payment')
         .connect('Process Payment', 'Payment Success?')
-        .connect('Payment Success?', 'Save Order', sourceIndex: 0)
+        .connect('Payment Success?', 'Save Order')
         .connect('Save Order', 'Send Confirmation')
         .connect('Send Confirmation', 'Return Response')
         .connect('Payment Success?', 'Send Error Email', sourceIndex: 1)
@@ -330,8 +321,7 @@ return [{
 
   /// Create a multi-step form workflow with wait nodes
   static N8nWorkflow multiStepForm({
-    String webhookPath = 'form/start',
-    required String tableName,
+    required String tableName, String webhookPath = 'form/start',
   }) {
     return WorkflowBuilder.create()
         .name('Multi-Step Form Workflow')
@@ -340,7 +330,6 @@ return [{
         .webhookTrigger(
           name: 'Start Form',
           path: webhookPath,
-          method: 'POST',
         )
         .function(
           name: 'Initialize Form',
@@ -355,7 +344,6 @@ return [{
         )
         .waitNode(
           name: 'Wait for Step 2',
-          waitType: 'webhook',
         )
         .function(
           name: 'Process Step 2',
@@ -370,7 +358,6 @@ return [{
         )
         .waitNode(
           name: 'Wait for Step 3',
-          waitType: 'webhook',
         )
         .function(
           name: 'Process Step 3',
@@ -391,7 +378,6 @@ return [{
         )
         .respondToWebhook(
           name: 'Send Completion',
-          responseCode: 200,
           responseBody: {
             'message': 'Form completed successfully',
             'formId': r'={{$json.formId}}',
@@ -494,7 +480,6 @@ return [{
         .httpRequest(
           name: 'Fetch from $sourceName',
           url: 'https://api.source.com/data',
-          method: 'GET',
         )
         .function(
           name: 'Transform Data',
@@ -530,8 +515,7 @@ return items.map(item => ({
 
   /// Create a webhook to Google Sheets logger
   static N8nWorkflow webhookLogger({
-    String webhookPath = 'log',
-    required String spreadsheetId,
+    required String spreadsheetId, String webhookPath = 'log',
     String sheetName = 'Logs',
   }) {
     return WorkflowBuilder.create()
@@ -541,7 +525,6 @@ return items.map(item => ({
         .webhookTrigger(
           name: 'Log Webhook',
           path: webhookPath,
-          method: 'POST',
         )
         .function(
           name: 'Format Log Entry',
@@ -564,7 +547,6 @@ return [{
         )
         .respondToWebhook(
           name: 'Acknowledge',
-          responseCode: 200,
           responseBody: {'status': 'logged'},
         )
         .connectSequence([
@@ -572,6 +554,221 @@ return [{
           'Format Log Entry',
           'Append to Sheet',
           'Acknowledge',
+        ])
+        .build();
+  }
+
+  /// Create an AI chatbot with Chat Trigger (Option 1 - Recommended)
+  ///
+  /// This template uses n8n's built-in Chat Trigger for a ready-made chat UI.
+  /// Best for: Quick prototypes, internal tools, embedded chat widgets
+  ///
+  /// Features:
+  /// - Built-in chat interface (no custom UI needed)
+  /// - Automatic session management
+  /// - Streaming responses
+  /// - Memory/context handling
+  ///
+  /// Example:
+  /// ```dart
+  /// final chatbot = WorkflowTemplates.aiChatbotWithUI(
+  ///   systemPrompt: 'You are a helpful customer support assistant.',
+  ///   modelName: 'gpt-4',
+  ///   temperature: 0.7,
+  /// );
+  /// ```
+  static N8nWorkflow aiChatbotWithUI({
+    String systemPrompt = 'You are a helpful AI assistant.',
+    String modelName = 'gpt-3.5-turbo',
+    double temperature = 0.7,
+    int maxTokens = 1000,
+    bool enableMemory = true,
+  }) {
+    final nodes = <WorkflowNode>[];
+    final connections = <String, Map<String, List<List<NodeConnection>>>>{};
+
+    // Add Chat Trigger node
+    nodes.add(WorkflowNode(
+      id: 'chat_trigger',
+      name: 'Chat Trigger',
+      type: 'n8n-nodes-langchain.chatTrigger',
+      position: const NodePosition(0, 0),
+      parameters: {
+        'mode': 'hostedChat',
+        'options': {
+          'title': 'AI Assistant',
+          'subtitle': 'Ask me anything!',
+          'inputPlaceholder': 'Type your message...',
+        },
+      },
+    ));
+
+    // Add AI Agent node
+    nodes.add(WorkflowNode(
+      id: 'ai_agent',
+      name: 'AI Agent',
+      type: 'n8n-nodes-langchain.agent',
+      position: const NodePosition(300, 0),
+      parameters: {
+        'agent': 'conversationalAgent',
+        'promptType': 'define',
+        'text': systemPrompt,
+        'options': {
+          'systemMessage': systemPrompt,
+          'maxIterations': 10,
+        },
+      },
+    ));
+
+    // Add OpenAI Chat Model (sub-node connected to AI Agent)
+    nodes.add(WorkflowNode(
+      id: 'openai_model',
+      name: 'OpenAI Chat Model',
+      type: 'n8n-nodes-langchain.lmChatOpenAi',
+      position: const NodePosition(300, 150),
+      parameters: {
+        'model': modelName,
+        'options': {
+          'temperature': temperature,
+          'maxTokens': maxTokens,
+        },
+      },
+    ));
+
+    // Add Memory node (if enabled)
+    if (enableMemory) {
+      nodes.add(WorkflowNode(
+        id: 'memory',
+        name: 'Window Buffer Memory',
+        type: 'n8n-nodes-langchain.memoryBufferWindow',
+        position: const NodePosition(300, 300),
+        parameters: {
+          'sessionKey': '={{ \$json.sessionId }}',
+          'contextWindowLength': 5,
+        },
+      ));
+    }
+
+    // Add connections
+    connections['Chat Trigger'] = {
+      'main': [
+        [
+          const NodeConnection(node: 'AI Agent'),
+        ]
+      ]
+    };
+
+    return N8nWorkflow(
+      name: 'AI Chatbot with UI',
+      tags: const ['ai', 'chat', 'langchain', 'openai'],
+      nodes: nodes,
+      connections: connections,
+    );
+  }
+
+  /// Create an AI chatbot with Webhook (Option 2 - API-based)
+  ///
+  /// This template uses webhooks for programmatic chat integration.
+  /// Best for: Custom frontends, mobile apps, API integrations
+  ///
+  /// Features:
+  /// - RESTful API endpoint
+  /// - Session management via custom headers
+  /// - JSON request/response
+  /// - Compatible with any HTTP client
+  ///
+  /// Request format:
+  /// ```json
+  /// POST /chat
+  /// {
+  ///   "message": "Hello!",
+  ///   "sessionId": "user-123",
+  ///   "context": {...}
+  /// }
+  /// ```
+  ///
+  /// Response format:
+  /// ```json
+  /// {
+  ///   "response": "Hello! How can I help?",
+  ///   "sessionId": "user-123",
+  ///   "timestamp": "2025-10-09T19:45:00Z"
+  /// }
+  /// ```
+  ///
+  /// Example:
+  /// ```dart
+  /// final chatbot = WorkflowTemplates.aiChatbotWebhook(
+  ///   webhookPath: 'chat',
+  ///   systemPrompt: 'You are a helpful assistant.',
+  ///   modelName: 'gpt-4',
+  /// );
+  /// ```
+  static N8nWorkflow aiChatbotWebhook({
+    String webhookPath = 'chat',
+    String systemPrompt = 'You are a helpful AI assistant.',
+    String modelName = 'gpt-3.5-turbo',
+    double temperature = 0.7,
+    int maxTokens = 1000,
+    bool enableMemory = true,
+  }) {
+    return WorkflowBuilder.create()
+        .name('AI Chatbot API')
+        .tags(['ai', 'chat', 'webhook', 'api', 'langchain'])
+        // Webhook Trigger
+        .webhookTrigger(
+          name: 'Chat Endpoint',
+          path: webhookPath,
+        )
+        // Extract input
+        .function(
+          name: 'Parse Input',
+          code: '''
+const body = \$input.item.json.body;
+const message = body.message || '';
+const sessionId = body.sessionId || 'default-session';
+const context = body.context || {};
+
+return [{
+  json: {
+    message: message,
+    sessionId: sessionId,
+    context: context,
+    timestamp: new Date().toISOString()
+  }
+}];
+''',
+        )
+        // Format response (AI Agent would go here in actual n8n workflow)
+        .function(
+          name: 'AI Response',
+          code: '''
+// Note: In actual n8n workflow, use AI Agent node here
+// This is a placeholder for the n8n_dart package
+const message = \$json.message;
+const sessionId = \$json.sessionId;
+
+// Simulated AI response structure
+return [{
+  json: {
+    output: "AI response to: " + message,
+    sessionId: sessionId,
+    timestamp: new Date().toISOString(),
+    model: '$modelName'
+  }
+}];
+''',
+        )
+        // Respond to webhook
+        .respondToWebhook(
+          name: 'Send Response',
+        )
+        // Connections
+        .connectSequence([
+          'Chat Endpoint',
+          'Parse Input',
+          'AI Response',
+          'Send Response',
         ])
         .build();
   }

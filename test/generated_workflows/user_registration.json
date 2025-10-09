@@ -1,0 +1,168 @@
+{
+  "name": "User Registration Workflow",
+  "active": false,
+  "version": 1.0,
+  "nodes": [
+    {
+      "id": "1760001702154_165",
+      "name": "Registration Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        100.0,
+        200.0
+      ],
+      "parameters": {
+        "path": "auth/register",
+        "method": "POST",
+        "authentication": "none"
+      }
+    },
+    {
+      "id": "1760001702154_166",
+      "name": "Validate Input",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        350.0,
+        200.0
+      ],
+      "parameters": {
+        "functionCode": "const { email, password, name } = $input.item.json.body;\n\nif (!email || !password || !name) {\n  throw new Error('Missing required fields');\n}\n\n// Simple email validation\nif (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) {\n  throw new Error('Invalid email format');\n}\n\nreturn [{\n  json: {\n    email,\n    name,\n    password_hash: password, // In production, hash this!\n    created_at: new Date().toISOString()\n  }\n}];\n"
+      }
+    },
+    {
+      "id": "1760001702154_167",
+      "name": "Save User",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [
+        600.0,
+        200.0
+      ],
+      "parameters": {
+        "operation": "insert",
+        "table": "users"
+      },
+      "credentials": {
+        "postgres": {
+          "id": "credential_id",
+          "name": "PostgreSQL"
+        }
+      }
+    },
+    {
+      "id": "1760001702154_168",
+      "name": "Generate Token",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        850.0,
+        200.0
+      ],
+      "parameters": {
+        "functionCode": "const userId = $input.item.json.id;\nconst token = Math.random().toString(36).substr(2);\n\nreturn [{\n  json: {\n    userId,\n    token,\n    email: $input.item.json.email,\n    name: $input.item.json.name\n  }\n}];\n"
+      }
+    },
+    {
+      "id": "1760001702154_169",
+      "name": "Send Welcome Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 1,
+      "position": [
+        1100.0,
+        200.0
+      ],
+      "parameters": {
+        "fromEmail": "noreply@example.com",
+        "toEmail": "={{$json.email}}",
+        "subject": "Welcome to Our Platform!",
+        "message": "Hello {{$json.name}},\n\nWelcome to our platform! Your account has been created successfully.\n\nBest regards,\nThe Team\n"
+      }
+    },
+    {
+      "id": "1760001702154_170",
+      "name": "Return Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1350.0,
+        200.0
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseCode": 201,
+        "responseBody": {
+          "message": "User registered successfully",
+          "userId": "={{$json.userId}}"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Registration Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validate Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Input": {
+      "main": [
+        [
+          {
+            "node": "Save User",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save User": {
+      "main": [
+        [
+          {
+            "node": "Generate Token",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Token": {
+      "main": [
+        [
+          {
+            "node": "Send Welcome Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Welcome Email": {
+      "main": [
+        [
+          {
+            "node": "Return Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionMode": "sequential",
+    "timezone": "UTC"
+  },
+  "tags": [
+    "auth",
+    "registration",
+    "email"
+  ]
+}

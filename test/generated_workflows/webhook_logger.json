@@ -1,11 +1,11 @@
 {
-  "name": "Simple Webhook to Database",
+  "name": "Webhook Event Logger",
   "active": false,
   "version": 1.0,
   "nodes": [
     {
-      "id": "1760003021920_1",
-      "name": "Webhook Trigger",
+      "id": "1760001702194_640",
+      "name": "Log Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1,
       "position": [
@@ -13,14 +13,14 @@
         200.0
       ],
       "parameters": {
-        "path": "simple-webhook",
+        "path": "log",
         "method": "POST",
         "authentication": "none"
       }
     },
     {
-      "id": "1760003021920_2",
-      "name": "Transform Data",
+      "id": "1760001702194_641",
+      "name": "Format Log Entry",
       "type": "n8n-nodes-base.function",
       "typeVersion": 1,
       "position": [
@@ -28,32 +28,33 @@
         200.0
       ],
       "parameters": {
-        "functionCode": "const { name, email, message } = $input.item.json.body;\n\nreturn [{\n  json: {\n    name,\n    email,\n    message,\n    created_at: new Date().toISOString()\n  }\n}];\n"
+        "functionCode": "return [{\n  json: {\n    timestamp: new Date().toISOString(),\n    event: $input.item.json.body.event,\n    data: JSON.stringify($input.item.json.body),\n    source: $input.item.json.headers['x-source'] || 'unknown'\n  }\n}];\n"
       }
     },
     {
-      "id": "1760003021921_3",
-      "name": "Save to Database",
-      "type": "n8n-nodes-base.postgres",
+      "id": "1760001702194_642",
+      "name": "Append to Sheet",
+      "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 1,
       "position": [
         600.0,
         200.0
       ],
       "parameters": {
-        "operation": "insert",
-        "table": "submissions"
+        "operation": "append",
+        "spreadsheetId": "test-spreadsheet-id",
+        "sheetName": "Logs"
       },
       "credentials": {
-        "postgres": {
+        "googleSheetsOAuth2Api": {
           "id": "credential_id",
-          "name": "PostgreSQL"
+          "name": "Google Sheets"
         }
       }
     },
     {
-      "id": "1760003021921_4",
-      "name": "Send Success Response",
+      "id": "1760001702194_643",
+      "name": "Acknowledge",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
       "position": [
@@ -64,40 +65,39 @@
         "respondWith": "json",
         "responseCode": 200,
         "responseBody": {
-          "status": "success",
-          "message": "Data saved successfully"
+          "status": "logged"
         }
       }
     }
   ],
   "connections": {
-    "Webhook Trigger": {
+    "Log Webhook": {
       "main": [
         [
           {
-            "node": "Transform Data",
+            "node": "Format Log Entry",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Transform Data": {
+    "Format Log Entry": {
       "main": [
         [
           {
-            "node": "Save to Database",
+            "node": "Append to Sheet",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Save to Database": {
+    "Append to Sheet": {
       "main": [
         [
           {
-            "node": "Send Success Response",
+            "node": "Acknowledge",
             "type": "main",
             "index": 0
           }
@@ -110,8 +110,8 @@
     "timezone": "UTC"
   },
   "tags": [
-    "example",
-    "webhook",
-    "database"
+    "logging",
+    "google-sheets",
+    "webhook"
   ]
 }
