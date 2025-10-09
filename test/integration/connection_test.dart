@@ -62,10 +62,14 @@ void main() {
       // Arrange - Create client with invalid base URL
       const invalidConfig = TestConfig(
         baseUrl: 'https://invalid-n8n-instance.example.com',
-        simpleWebhookId: 'test',
-        waitNodeWebhookId: 'test',
-        slowWebhookId: 'test',
-        errorWebhookId: 'test',
+        simpleWorkflowId: 'test',
+        waitNodeWorkflowId: 'test',
+        slowWorkflowId: 'test',
+        errorWorkflowId: 'test',
+        simpleWebhookPath: 'test',
+        waitNodeWebhookPath: 'test',
+        slowWebhookPath: 'test',
+        errorWebhookPath: 'test',
       );
       final client = createTestClient(invalidConfig);
       addTearDown(client.dispose);
@@ -159,21 +163,21 @@ void main() {
       expect(config.baseUrl, isNotEmpty);
       expect(config.baseUrl, startsWith('http'),
           reason: 'Base URL should start with http:// or https://');
-      expect(config.simpleWebhookId, isNotEmpty);
-      expect(config.waitNodeWebhookId, isNotEmpty);
-      expect(config.slowWebhookId, isNotEmpty);
-      expect(config.errorWebhookId, isNotEmpty);
+      expect(config.simpleWebhookPath, isNotEmpty);
+      expect(config.waitNodeWebhookPath, isNotEmpty);
+      expect(config.slowWebhookPath, isNotEmpty);
+      expect(config.errorWebhookPath, isNotEmpty);
     });
 
     test('should have proper test workflow IDs configured', () {
       // Assert - Verify all required webhook IDs are configured
-      expect(config.simpleWebhookId, isNotEmpty,
+      expect(config.simpleWebhookPath, isNotEmpty,
           reason: 'Simple webhook ID must be configured');
-      expect(config.waitNodeWebhookId, isNotEmpty,
+      expect(config.waitNodeWebhookPath, isNotEmpty,
           reason: 'Wait node webhook ID must be configured');
-      expect(config.slowWebhookId, isNotEmpty,
+      expect(config.slowWebhookPath, isNotEmpty,
           reason: 'Slow workflow webhook ID must be configured');
-      expect(config.errorWebhookId, isNotEmpty,
+      expect(config.errorWebhookPath, isNotEmpty,
           reason: 'Error workflow webhook ID must be configured');
     });
 
@@ -181,10 +185,14 @@ void main() {
       // Arrange
       final noApiKeyConfig = TestConfig(
         baseUrl: config.baseUrl,
-        simpleWebhookId: 'test',
-        waitNodeWebhookId: 'test',
-        slowWebhookId: 'test',
-        errorWebhookId: 'test',
+        simpleWorkflowId: 'test',
+        waitNodeWorkflowId: 'test',
+        slowWorkflowId: 'test',
+        errorWorkflowId: 'test',
+        simpleWebhookPath: 'test',
+        waitNodeWebhookPath: 'test',
+        slowWebhookPath: 'test',
+        errorWebhookPath: 'test',
       );
 
       // Act

@@ -1,0 +1,95 @@
+{
+  "name": "Test: Simple Webhook",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "test/simple",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-simple",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "webhookId": ""
+    },
+    {
+      "parameters": {
+        "values": {
+          "boolean": [],
+          "number": [],
+          "string": [
+            {
+              "name": "execution_id",
+              "value": "={{$execution.id}}"
+            },
+            {
+              "name": "test_passed",
+              "value": "true"
+            },
+            {
+              "name": "timestamp",
+              "value": "={{$now.toISO()}}"
+            }
+          ]
+        },
+        "options": {
+          "dotNotation": false
+        }
+      },
+      "id": "set-simple",
+      "name": "Set",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [470, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "firstIncomingItem",
+        "options": {}
+      },
+      "id": "respond-simple",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [690, 300]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Set",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "",
+  "id": "",
+  "tags": [
+    {
+      "name": "integration-test"
+    }
+  ]
+}

@@ -80,7 +80,7 @@ void main() {
 
       // Act - Trigger wait node workflow
       final executionId = await client.startWorkflow(
-        config.waitNodeWebhookId,
+        config.waitNodeWebhookPath,
         payload,
       );
       TestCleanup.registerExecution(executionId);
@@ -107,7 +107,7 @@ void main() {
 
       // Act - Trigger simple workflow (no wait node)
       final executionId = await client.startWorkflow(
-        config.simpleWebhookId,
+        config.simpleWebhookPath,
         payload,
       );
       TestCleanup.registerExecution(executionId);
@@ -134,7 +134,7 @@ void main() {
 
       // Act - Trigger wait node workflow
       final executionId = await client.startWorkflow(
-        config.waitNodeWebhookId,
+        config.waitNodeWebhookPath,
         payload,
       );
       TestCleanup.registerExecution(executionId);
@@ -167,7 +167,7 @@ void main() {
 
       // Act - Trigger wait node workflow
       final executionId = await client.startWorkflow(
-        config.waitNodeWebhookId,
+        config.waitNodeWebhookPath,
         payload,
       );
       TestCleanup.registerExecution(executionId);
@@ -202,7 +202,7 @@ void main() {
 
       // Act - Trigger wait node workflow
       final executionId = await client.startWorkflow(
-        config.waitNodeWebhookId,
+        config.waitNodeWebhookPath,
         payload,
       );
       TestCleanup.registerExecution(executionId);
@@ -242,7 +242,7 @@ void main() {
 
       // Act - Trigger wait node workflow
       final executionId = await client.startWorkflow(
-        config.waitNodeWebhookId,
+        config.waitNodeWebhookPath,
         payload,
       );
       TestCleanup.registerExecution(executionId);
@@ -298,7 +298,7 @@ void main() {
 
       // Act - Start workflow and wait for waiting state
       final executionId = await client.startWorkflow(
-        config.waitNodeWebhookId,
+        config.waitNodeWebhookPath,
         payload,
       );
       TestCleanup.registerExecution(executionId);
@@ -342,7 +342,7 @@ void main() {
 
       // Act - Start workflow
       final executionId = await client.startWorkflow(
-        config.waitNodeWebhookId,
+        config.waitNodeWebhookPath,
         payload,
       );
       TestCleanup.registerExecution(executionId);
@@ -388,7 +388,7 @@ void main() {
 
       // Act - Start workflow and wait for waiting state
       final executionId = await client.startWorkflow(
-        config.waitNodeWebhookId,
+        config.waitNodeWebhookPath,
         payload,
       );
       TestCleanup.registerExecution(executionId);
@@ -426,7 +426,7 @@ void main() {
 
       // Act - Start workflow and wait for waiting state
       final executionId = await client.startWorkflow(
-        config.waitNodeWebhookId,
+        config.waitNodeWebhookPath,
         payload,
       );
       TestCleanup.registerExecution(executionId);
@@ -472,7 +472,7 @@ void main() {
 
       // Act - Start workflow and wait for waiting state
       final executionId = await client.startWorkflow(
-        config.waitNodeWebhookId,
+        config.waitNodeWebhookPath,
         payload,
       );
       TestCleanup.registerExecution(executionId);

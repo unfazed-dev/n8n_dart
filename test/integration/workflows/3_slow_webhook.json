@@ -1,0 +1,118 @@
+{
+  "name": "Test: Slow Webhook",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "test/slow",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-slow",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "webhookId": ""
+    },
+    {
+      "parameters": {
+        "functionCode": "// Wait for 10 seconds\nawait new Promise(resolve => setTimeout(resolve, 10000));\nreturn items;"
+      },
+      "id": "function-slow",
+      "name": "Delay Function",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [470, 300]
+    },
+    {
+      "parameters": {
+        "values": {
+          "boolean": [
+            {
+              "name": "slow_test_passed",
+              "value": true
+            }
+          ],
+          "number": [
+            {
+              "name": "delay_seconds",
+              "value": 10
+            }
+          ],
+          "string": [
+            {
+              "name": "execution_id",
+              "value": "={{$execution.id}}"
+            }
+          ]
+        },
+        "options": {
+          "dotNotation": false
+        }
+      },
+      "id": "set-slow",
+      "name": "Set",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [690, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "firstIncomingItem",
+        "options": {}
+      },
+      "id": "respond-slow",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [910, 300]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Delay Function",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Delay Function": {
+      "main": [
+        [
+          {
+            "node": "Set",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "",
+  "id": "",
+  "tags": [
+    {
+      "name": "integration-test"
+    }
+  ]
+}

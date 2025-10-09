@@ -68,7 +68,7 @@ void main() {
 
       // Act
       final executionId =
-          await client.startWorkflow(config.simpleWebhookId, testData);
+          await client.startWorkflow(config.simpleWebhookPath, testData);
 
       // Assert
       expect(executionId, isNotEmpty,
@@ -89,7 +89,7 @@ void main() {
 
       // Act
       final executionId =
-          await client.startWorkflow(config.simpleWebhookId, testData);
+          await client.startWorkflow(config.simpleWebhookPath, testData);
       TestCleanup.registerExecution(executionId);
 
       final execution = await client.getExecutionStatus(executionId);
@@ -116,7 +116,7 @@ void main() {
 
       // Act
       final executionId =
-          await client.startWorkflow(config.simpleWebhookId, testData);
+          await client.startWorkflow(config.simpleWebhookPath, testData);
       TestCleanup.registerExecution(executionId);
 
       // Wait for completion
@@ -142,7 +142,7 @@ void main() {
 
       // Act
       final executionId =
-          await client.startWorkflow(config.simpleWebhookId, testData);
+          await client.startWorkflow(config.simpleWebhookPath, testData);
       TestCleanup.registerExecution(executionId);
 
       final completed = await waitForExecutionCompletion(
@@ -174,7 +174,7 @@ void main() {
 
       // Act
       final executionId =
-          await client.startWorkflow(config.simpleWebhookId, testData);
+          await client.startWorkflow(config.simpleWebhookPath, testData);
       TestCleanup.registerExecution(executionId);
 
       // Track status transitions
@@ -225,7 +225,7 @@ void main() {
 
       // Act
       final executionId =
-          await client.startWorkflow(config.simpleWebhookId, testData);
+          await client.startWorkflow(config.simpleWebhookPath, testData);
       TestCleanup.registerExecution(executionId);
 
       final completed = await waitForExecutionCompletion(
@@ -254,7 +254,7 @@ void main() {
 
       // Act
       final executionId =
-          await client.startWorkflow(config.simpleWebhookId, testData);
+          await client.startWorkflow(config.simpleWebhookPath, testData);
       TestCleanup.registerExecution(executionId);
 
       // Wait for completion
@@ -292,7 +292,7 @@ void main() {
 
       // Act
       final executionId =
-          await client.startWorkflow(config.slowWebhookId, testData);
+          await client.startWorkflow(config.slowWebhookPath, testData);
       TestCleanup.registerExecution(executionId);
 
       final stopwatch = Stopwatch()..start();
@@ -327,7 +327,7 @@ void main() {
 
       // Act
       final executionId =
-          await client.startWorkflow(config.slowWebhookId, testData);
+          await client.startWorkflow(config.slowWebhookPath, testData);
       TestCleanup.registerExecution(executionId);
 
       // Count poll attempts
@@ -362,7 +362,7 @@ void main() {
 
       // Act
       final executionId =
-          await client.startWorkflow(config.errorWebhookId, testData);
+          await client.startWorkflow(config.errorWebhookPath, testData);
       TestCleanup.registerExecution(executionId);
 
       final completed = await waitForExecutionCompletion(
@@ -439,7 +439,7 @@ void main() {
       // Act - Start all workflows concurrently
       final executionIds = await Future.wait(
         testDataList.map(
-          (data) => client.startWorkflow(config.simpleWebhookId, data),
+          (data) => client.startWorkflow(config.simpleWebhookPath, data),
         ),
       );
 
@@ -486,9 +486,9 @@ void main() {
 
       // Act
       final executionId1 =
-          await client.startWorkflow(config.simpleWebhookId, data1);
+          await client.startWorkflow(config.simpleWebhookPath, data1);
       final executionId2 =
-          await client.startWorkflow(config.simpleWebhookId, data2);
+          await client.startWorkflow(config.simpleWebhookPath, data2);
 
       TestCleanup.registerExecution(executionId1);
       TestCleanup.registerExecution(executionId2);
@@ -520,7 +520,7 @@ void main() {
 
       // Act
       final executionId =
-          await client.startWorkflow(config.simpleWebhookId, testData);
+          await client.startWorkflow(config.simpleWebhookPath, testData);
       TestCleanup.registerExecution(executionId);
 
       // Cleanup should be called by tearDown

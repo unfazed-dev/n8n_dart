@@ -1,0 +1,150 @@
+{
+  "name": "Test: Wait Node Webhook",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "test/wait-node",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-wait",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "webhookId": ""
+    },
+    {
+      "parameters": {
+        "resume": "form",
+        "formTitle": "Test Form",
+        "formDescription": "Integration test form",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Full Name",
+              "fieldType": "text",
+              "requiredField": true,
+              "fieldOptions": {}
+            },
+            {
+              "fieldLabel": "Email Address",
+              "fieldType": "email",
+              "requiredField": true,
+              "fieldOptions": {}
+            },
+            {
+              "fieldLabel": "Age",
+              "fieldType": "number",
+              "requiredField": false,
+              "fieldOptions": {}
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "wait-node",
+      "name": "Wait",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [470, 300]
+    },
+    {
+      "parameters": {
+        "values": {
+          "boolean": [
+            {
+              "name": "form_submitted",
+              "value": true
+            }
+          ],
+          "number": [],
+          "string": [
+            {
+              "name": "execution_id",
+              "value": "={{$execution.id}}"
+            },
+            {
+              "name": "submitted_name",
+              "value": "={{$('Wait').item.json.name}}"
+            },
+            {
+              "name": "submitted_email",
+              "value": "={{$('Wait').item.json.email}}"
+            },
+            {
+              "name": "submitted_age",
+              "value": "={{$('Wait').item.json.age}}"
+            }
+          ]
+        },
+        "options": {
+          "dotNotation": false
+        }
+      },
+      "id": "set-wait",
+      "name": "Set",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [690, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "firstIncomingItem",
+        "options": {}
+      },
+      "id": "respond-wait",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [910, 300]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "Set",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "",
+  "id": "",
+  "tags": [
+    {
+      "name": "integration-test"
+    }
+  ]
+}

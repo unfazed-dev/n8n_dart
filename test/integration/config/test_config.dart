@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:dotenv/dotenv.dart';
+import 'package:n8n_dart/n8n_dart.dart';
 
 /// Integration test configuration loaded from .env.test file
 ///
@@ -20,11 +21,18 @@ class TestConfig {
   final String baseUrl;
   final String? apiKey;
 
-  // Test Workflow Webhook IDs
-  final String simpleWebhookId;
-  final String waitNodeWebhookId;
-  final String slowWebhookId;
-  final String errorWebhookId;
+  // Test Workflow Configuration
+  // Workflow IDs (used for listing executions via API)
+  final String simpleWorkflowId;
+  final String waitNodeWorkflowId;
+  final String slowWorkflowId;
+  final String errorWorkflowId;
+
+  // Webhook paths (used for triggering workflows)
+  final String simpleWebhookPath;
+  final String waitNodeWebhookPath;
+  final String slowWebhookPath;
+  final String errorWebhookPath;
 
   // Test Configuration
   final int timeoutSeconds;
@@ -43,10 +51,14 @@ class TestConfig {
 
   const TestConfig({
     required this.baseUrl,
-    required this.simpleWebhookId,
-    required this.waitNodeWebhookId,
-    required this.slowWebhookId,
-    required this.errorWebhookId,
+    required this.simpleWorkflowId,
+    required this.waitNodeWorkflowId,
+    required this.slowWorkflowId,
+    required this.errorWorkflowId,
+    required this.simpleWebhookPath,
+    required this.waitNodeWebhookPath,
+    required this.slowWebhookPath,
+    required this.errorWebhookPath,
     this.apiKey,
     this.timeoutSeconds = 300,
     this.maxRetries = 3,
@@ -58,6 +70,79 @@ class TestConfig {
     this.supabaseDbHost,
     this.supabaseDbPassword,
   });
+
+  /// Check if integration tests can run (config file exists)
+  static bool canRun() {
+    return File('.env.test').existsSync();
+  }
+
+  /// Load test configuration from .env.test file with auto-discovery
+  ///
+  /// This method loads the configuration and automatically fetches workflow IDs
+  /// from the n8n API if they're set to 'auto' in the .env.test file.
+  ///
+  /// Throws [FileSystemException] if .env.test file doesn't exist
+  /// Throws [ArgumentError] if required environment variables are missing
+  static Future<TestConfig> loadWithAutoDiscovery() async {
+    final config = TestConfig.load();
+
+    // Auto-discover workflow IDs if needed
+    final idsToFetch = <String, String>{};
+
+    if (config.simpleWorkflowId == 'auto') {
+      idsToFetch['simple'] = config.simpleWebhookPath;
+    }
+    if (config.waitNodeWorkflowId == 'auto') {
+      idsToFetch['waitNode'] = config.waitNodeWebhookPath;
+    }
+    if (config.slowWorkflowId == 'auto') {
+      idsToFetch['slow'] = config.slowWebhookPath;
+    }
+    if (config.errorWorkflowId == 'auto') {
+      idsToFetch['error'] = config.errorWebhookPath;
+    }
+
+    if (idsToFetch.isEmpty) {
+      return config; // No auto-discovery needed
+    }
+
+    // Fetch workflow IDs from API
+    final discoveredIds = <String, String>{};
+    for (final entry in idsToFetch.entries) {
+      final id = await config.fetchWorkflowIdByWebhookPath(entry.value);
+      if (id != null) {
+        discoveredIds[entry.key] = id;
+      } else {
+        throw StateError(
+          'Failed to auto-discover workflow ID for ${entry.value}. '
+          'Make sure the workflow is active in n8n.',
+        );
+      }
+    }
+
+    // Return new config with discovered IDs
+    return TestConfig(
+      baseUrl: config.baseUrl,
+      apiKey: config.apiKey,
+      simpleWorkflowId: discoveredIds['simple'] ?? config.simpleWorkflowId,
+      waitNodeWorkflowId: discoveredIds['waitNode'] ?? config.waitNodeWorkflowId,
+      slowWorkflowId: discoveredIds['slow'] ?? config.slowWorkflowId,
+      errorWorkflowId: discoveredIds['error'] ?? config.errorWorkflowId,
+      simpleWebhookPath: config.simpleWebhookPath,
+      waitNodeWebhookPath: config.waitNodeWebhookPath,
+      slowWebhookPath: config.slowWebhookPath,
+      errorWebhookPath: config.errorWebhookPath,
+      timeoutSeconds: config.timeoutSeconds,
+      maxRetries: config.maxRetries,
+      pollingIntervalMs: config.pollingIntervalMs,
+      runIntegrationTests: config.runIntegrationTests,
+      skipSlowTests: config.skipSlowTests,
+      supabaseUrl: config.supabaseUrl,
+      supabaseKey: config.supabaseKey,
+      supabaseDbHost: config.supabaseDbHost,
+      supabaseDbPassword: config.supabaseDbPassword,
+    );
+  }
 
   /// Load test configuration from .env.test file
   ///
@@ -114,11 +199,17 @@ class TestConfig {
       baseUrl: getRequired('N8N_BASE_URL'),
       apiKey: getOptional('N8N_API_KEY'),
 
-      // Test Workflow Webhook IDs
-      simpleWebhookId: getRequired('N8N_SIMPLE_WEBHOOK_ID'),
-      waitNodeWebhookId: getRequired('N8N_WAIT_NODE_WEBHOOK_ID'),
-      slowWebhookId: getRequired('N8N_SLOW_WEBHOOK_ID'),
-      errorWebhookId: getRequired('N8N_ERROR_WEBHOOK_ID'),
+      // Test Workflow IDs
+      simpleWorkflowId: getRequired('N8N_SIMPLE_WORKFLOW_ID'),
+      waitNodeWorkflowId: getRequired('N8N_WAIT_NODE_WORKFLOW_ID'),
+      slowWorkflowId: getRequired('N8N_SLOW_WORKFLOW_ID'),
+      errorWorkflowId: getRequired('N8N_ERROR_WORKFLOW_ID'),
+
+      // Test Webhook Paths
+      simpleWebhookPath: getRequired('N8N_SIMPLE_WEBHOOK_PATH'),
+      waitNodeWebhookPath: getRequired('N8N_WAIT_NODE_WEBHOOK_PATH'),
+      slowWebhookPath: getRequired('N8N_SLOW_WEBHOOK_PATH'),
+      errorWebhookPath: getRequired('N8N_ERROR_WEBHOOK_PATH'),
 
       // Test Configuration
       timeoutSeconds: getInt('TEST_TIMEOUT_SECONDS', 300),
@@ -168,10 +259,14 @@ class TestConfig {
     return TestConfig(
       baseUrl: getRequired('N8N_BASE_URL'),
       apiKey: getOptional('N8N_API_KEY'),
-      simpleWebhookId: getRequired('N8N_SIMPLE_WEBHOOK_ID'),
-      waitNodeWebhookId: getRequired('N8N_WAIT_NODE_WEBHOOK_ID'),
-      slowWebhookId: getRequired('N8N_SLOW_WEBHOOK_ID'),
-      errorWebhookId: getRequired('N8N_ERROR_WEBHOOK_ID'),
+      simpleWorkflowId: getRequired('N8N_SIMPLE_WORKFLOW_ID'),
+      waitNodeWorkflowId: getRequired('N8N_WAIT_NODE_WORKFLOW_ID'),
+      slowWorkflowId: getRequired('N8N_SLOW_WORKFLOW_ID'),
+      errorWorkflowId: getRequired('N8N_ERROR_WORKFLOW_ID'),
+      simpleWebhookPath: getRequired('N8N_SIMPLE_WEBHOOK_PATH'),
+      waitNodeWebhookPath: getRequired('N8N_WAIT_NODE_WEBHOOK_PATH'),
+      slowWebhookPath: getRequired('N8N_SLOW_WEBHOOK_PATH'),
+      errorWebhookPath: getRequired('N8N_ERROR_WEBHOOK_PATH'),
       timeoutSeconds: getInt('TEST_TIMEOUT_SECONDS', 300),
       maxRetries: getInt('TEST_MAX_RETRIES', 3),
       pollingIntervalMs: getInt('TEST_POLLING_INTERVAL_MS', 2000),
@@ -224,11 +319,133 @@ class TestConfig {
       supabaseDbHost != null &&
       supabaseDbPassword != null;
 
+  /// Get discovery service instance
+  N8nDiscoveryService _getDiscoveryService() {
+    if (apiKey == null) {
+      throw StateError('API key is required for workflow discovery');
+    }
+    return N8nDiscoveryService(
+      baseUrl: baseUrl,
+      apiKey: apiKey!,
+    );
+  }
+
+  /// Fetch workflow ID from n8n API by webhook path
+  ///
+  /// This method queries the n8n API to find the active workflow that has a webhook
+  /// matching the given path. This ensures we always use the correct workflow ID
+  /// even if workflows are recreated or duplicated.
+  ///
+  /// Returns the workflow ID if found, null otherwise.
+  Future<String?> fetchWorkflowIdByWebhookPath(String webhookPath) async {
+    final service = _getDiscoveryService();
+    try {
+      return await service.findWorkflowByWebhookPath(webhookPath);
+    } finally {
+      service.dispose();
+    }
+  }
+
+  /// Auto-discover all workflow IDs from n8n API
+  ///
+  /// This method fetches workflow IDs for all configured webhook paths.
+  /// Returns a map of webhook path to workflow ID.
+  Future<Map<String, String>> fetchAllWorkflowIds() async {
+    final ids = <String, String>{};
+
+    final paths = [
+      simpleWebhookPath,
+      waitNodeWebhookPath,
+      slowWebhookPath,
+      errorWebhookPath,
+    ];
+
+    for (final path in paths) {
+      final id = await fetchWorkflowIdByWebhookPath(path);
+      if (id != null) {
+        ids[path] = id;
+      }
+    }
+
+    return ids;
+  }
+
+  /// Fetch recent execution IDs for a workflow
+  ///
+  /// This method queries the n8n API to get recent executions for a specific workflow.
+  /// Useful when you need to find existing executions without triggering new ones.
+  ///
+  /// Parameters:
+  /// - [workflowId]: The workflow ID to fetch executions for
+  /// - [limit]: Maximum number of executions to return (default: 10)
+  /// - [status]: Filter by execution status (optional)
+  ///
+  /// Returns a list of execution IDs, ordered by most recent first.
+  Future<List<String>> fetchExecutionIds({
+    required String workflowId,
+    int limit = 10,
+    WorkflowStatus? status,
+  }) async {
+    final service = _getDiscoveryService();
+    try {
+      return await service.getRecentExecutions(
+        workflowId,
+        limit: limit,
+        status: status,
+      );
+    } finally {
+      service.dispose();
+    }
+  }
+
+  /// Fetch the most recent execution ID for a workflow
+  ///
+  /// This is a convenience method that returns just the latest execution ID.
+  ///
+  /// Returns the execution ID if found, null otherwise.
+  Future<String?> fetchLatestExecutionId({
+    required String workflowId,
+    WorkflowStatus? status,
+  }) async {
+    final service = _getDiscoveryService();
+    try {
+      return await service.getLatestExecution(
+        workflowId,
+        status: status,
+      );
+    } finally {
+      service.dispose();
+    }
+  }
+
+  /// Fetch execution IDs by webhook path
+  ///
+  /// This method first finds the workflow ID for the given webhook path,
+  /// then fetches recent execution IDs for that workflow.
+  ///
+  /// This is useful when you know the webhook path but not the workflow ID.
+  Future<List<String>> fetchExecutionIdsByWebhookPath({
+    required String webhookPath,
+    int limit = 10,
+    WorkflowStatus? status,
+  }) async {
+    final service = _getDiscoveryService();
+    try {
+      return await service.getRecentExecutionsByWebhookPath(
+        webhookPath,
+        limit: limit,
+        status: status,
+      );
+    } finally {
+      service.dispose();
+    }
+  }
+
   @override
   String toString() => 'TestConfig('
       'baseUrl: $baseUrl, '
-      'simpleWebhookId: $simpleWebhookId, '
-      'waitNodeWebhookId: $waitNodeWebhookId, '
+      'simpleWorkflowId: $simpleWorkflowId, '
+      'simpleWebhookPath: $simpleWebhookPath, '
       'timeout: ${timeout.inSeconds}s, '
       'pollingInterval: ${pollingInterval.inMilliseconds}ms'
       ')';

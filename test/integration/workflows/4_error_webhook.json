@@ -1,0 +1,112 @@
+{
+  "name": "Test: Error Webhook",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "test/error",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-error",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "webhookId": ""
+    },
+    {
+      "parameters": {
+        "values": {
+          "boolean": [],
+          "number": [],
+          "string": [
+            {
+              "name": "execution_id",
+              "value": "={{$execution.id}}"
+            },
+            {
+              "name": "status",
+              "value": "starting"
+            }
+          ]
+        },
+        "options": {
+          "dotNotation": false
+        }
+      },
+      "id": "set-error",
+      "name": "Set",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [470, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "firstIncomingItem",
+        "options": {}
+      },
+      "id": "respond-error",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [690, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "throw new Error('Intentional test error');"
+      },
+      "id": "function-error",
+      "name": "Throw Error",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [910, 300]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Set",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond to Webhook": {
+      "main": [
+        [
+          {
+            "node": "Throw Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "",
+  "id": "",
+  "tags": [
+    {
+      "name": "integration-test"
+    }
+  ]
+}

@@ -79,6 +79,7 @@ export 'src/core/exceptions/error_handling.dart';
 export 'src/core/models/n8n_models.dart';
 // Services
 export 'src/core/services/n8n_client.dart';
+export 'src/core/services/n8n_discovery_service.dart';
 export 'src/core/services/polling_manager.dart';
 export 'src/core/services/reactive_error_handler.dart';
 export 'src/core/services/reactive_execution_cache.dart';

@@ -97,16 +97,21 @@ class ReactiveN8nClient {
 
   /// Start a workflow execution (returns stream with single emission)
   ///
+  /// [workflowId] - Optional workflow ID to lookup execution via REST API
+  ///
   /// Returns a stream that:
   /// - Emits WorkflowExecution when started
   /// - Supports multiple subscribers (shareReplay)
   /// - Emits to workflowEvents$ on start
   /// - Updates executionState$
+  ///
+  /// If workflowId is provided, uses REST API to get real execution ID
   Stream<WorkflowExecution> startWorkflow(
     String webhookId,
-    Map<String, dynamic>? data,
-  ) {
-    return Stream.fromFuture(_performStartWorkflow(webhookId, data))
+    Map<String, dynamic>? data, {
+    String? workflowId,
+  }) {
+    return Stream.fromFuture(_performStartWorkflow(webhookId, data, workflowId: workflowId))
         .doOnData((execution) {
           // Update state
           _updateExecutionState(execution);
@@ -487,29 +492,91 @@ class ReactiveN8nClient {
   // PRIVATE IMPLEMENTATION METHODS
 
   Future<WorkflowExecution> _performStartWorkflow(
-    String webhookId,
-    Map<String, dynamic>? data,
-  ) async {
+    String webhookPath,
+    Map<String, dynamic>? data, {
+    String? workflowId,
+  }) async {
     final startTime = DateTime.now();
 
     try {
-      final url = Uri.parse('${config.baseUrl}/api/start-workflow/$webhookId');
-      final headers = _buildHeaders();
-      final body = json.encode({'body': data ?? {}});
+      // Step 1: Trigger workflow via webhook
+      final webhookUrl = Uri.parse('${config.baseUrl}/webhook/$webhookPath');
+      final headers = {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      };
+      final body = json.encode(data ?? {});
 
       final response = await _httpClient
-          .post(url, headers: headers, body: body)
+          .post(webhookUrl, headers: headers, body: body)
           .timeout(config.webhook.timeout);
 
       _updateMetrics(
           success: true, responseTime: DateTime.now().difference(startTime));
 
-      if (response.statusCode == 200) {
-        final responseData = json.decode(response.body) as Map<String, dynamic>;
-        return WorkflowExecution.fromJson(responseData);
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final now = DateTime.now();
+        String executionId;
+        Map<String, dynamic>? responseData;
+
+        // Step 2: If workflowId provided, get real execution ID via REST API
+        if (workflowId != null && config.security.apiKey != null) {
+          // Small delay to let execution start
+          await Future.delayed(const Duration(milliseconds: 500));
+
+          try {
+            // Use the underlying N8nClient's listExecutions via _httpClient
+            final url = Uri.parse('${config.baseUrl}/api/v1/executions')
+                .replace(queryParameters: {
+              'workflowId': workflowId,
+              'limit': '1',
+            });
+            final apiHeaders = {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+              'X-N8N-API-KEY': config.security.apiKey!,
+            };
+
+            final execResponse = await _httpClient
+                .get(url, headers: apiHeaders)
+                .timeout(config.webhook.timeout);
+
+            if (execResponse.statusCode == 200) {
+              final execData = json.decode(execResponse.body) as Map<String, dynamic>;
+              final executions = execData['data'] as List<dynamic>?;
+
+              if (executions != null && executions.isNotEmpty) {
+                final execution = executions.first as Map<String, dynamic>;
+                executionId = execution['id'].toString();
+
+                return WorkflowExecution(
+                  id: executionId,
+                  workflowId: workflowId,
+                  status: WorkflowStatus.running,
+                  startedAt: now,
+                  data: responseData,
+                );
+              }
+            }
+          } catch (_) {
+            // If API lookup fails, fall through to pseudo ID
+          }
+        }
+
+        // Step 3: Fallback to pseudo execution ID
+        final timestamp = now.millisecondsSinceEpoch;
+        executionId = 'webhook-$webhookPath-$timestamp';
+
+        return WorkflowExecution(
+          id: executionId,
+          workflowId: webhookPath,
+          status: WorkflowStatus.running,
+          startedAt: now,
+          data: responseData,
+        );
       } else {
         throw N8nException.serverError(
-          'Failed to start workflow: ${response.body}',
+          'Failed to trigger webhook: ${response.body}',
           statusCode: response.statusCode,
         );
       }
@@ -525,7 +592,16 @@ class ReactiveN8nClient {
     final startTime = DateTime.now();
 
     try {
-      final url = Uri.parse('${config.baseUrl}/api/execution/$executionId');
+      // Skip pseudo execution IDs from webhook-only mode
+      if (executionId.startsWith('webhook-')) {
+        throw N8nException.workflow(
+          'Cannot get status for webhook-only execution ID. '
+          'REST API access required.',
+        );
+      }
+
+      // Use REST API endpoint (requires API key)
+      final url = Uri.parse('${config.baseUrl}/api/v1/executions/$executionId');
       final headers = _buildHeaders();
 
       final response = await _httpClient
@@ -538,6 +614,10 @@ class ReactiveN8nClient {
       if (response.statusCode == 200) {
         final responseData = json.decode(response.body) as Map<String, dynamic>;
         return WorkflowExecution.fromJson(responseData);
+      } else if (response.statusCode == 404) {
+        throw N8nException.workflow(
+          'Execution not found: $executionId',
+        );
       } else {
         throw N8nException.serverError(
           'Failed to get execution status: ${response.body}',
@@ -684,7 +764,7 @@ class ReactiveN8nClient {
     };
 
     if (config.security.apiKey != null) {
-      headers['Authorization'] = 'Bearer ${config.security.apiKey}';
+      headers['X-N8N-API-KEY'] = config.security.apiKey!;
     }
 
     headers.addAll(config.security.customHeaders);

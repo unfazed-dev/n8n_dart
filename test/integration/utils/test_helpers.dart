@@ -270,7 +270,7 @@ class TestCleanup {
 ///   void defineTests() {
 ///     test('my test', () async {
 ///       final execution = await client.startWorkflow(
-///         config.simpleWebhookId,
+///         config.simpleWebhookPath,
 ///         TestDataGenerator.simple(),
 ///       );
 ///       registerExecution(execution.id);
