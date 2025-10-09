@@ -74,6 +74,9 @@ void main() async {
   // Example 17: Stripe Payment with Supabase Booking & Invoice
   await example17StripeBookingInvoice(outputDir.path);
 
+  // Example 18: Interactive Chat Assistant with Flutter UI
+  await example18InteractiveChatAssistant(outputDir.path);
+
   print('\n✅ All workflows generated successfully!');
   print('📁 Check the "generated_workflows" directory for JSON files.');
   print('\n📤 Import these files into n8n:');
@@ -3186,4 +3189,528 @@ View: {{$json.invoice_url}}
 
   await workflow.saveToFile('$outputPath/19_stripe_booking_invoice.json');
   print('   ✓ Generated: 19_stripe_booking_invoice.json\n');
+}
+/// Example 18: Interactive Chat Assistant with Flutter UI
+/// Demonstrates wait nodes with metadata for interactive UI elements
+/// Supports quick replies, cards, carousels, chips, and confirmations
+Future<void> example18InteractiveChatAssistant(String outputPath) async {
+  print('📝 Example 18: Interactive Chat Assistant (Flutter UI)');
+
+  final workflow = WorkflowBuilder.create()
+      .name('Interactive Chat Assistant - Flutter')
+      .tags(['chat', 'interactive', 'flutter', 'ui', 'assistant'])
+      .active(true)
+      // Receive message from Flutter app
+      .webhookTrigger(
+        name: 'Chat Webhook',
+        path: 'chat/interactive',
+        method: 'POST',
+      )
+      // Parse incoming message and extract intent
+      .function(
+        name: 'Parse Message',
+        code: r'''
+const msg = $input.item.json;
+
+return [{
+  json: {
+    message: msg.message || msg.text || '',
+    conversationId: msg.conversationId || 'unknown',
+    userId: msg.userId || 'anonymous',
+    timestamp: msg.timestamp || new Date().toISOString(),
+    messageId: `msg_${Date.now()}`
+  }
+}];
+''',
+      )
+      // Store message in conversation history
+      .postgres(
+        name: 'Save Message',
+        operation: 'insert',
+        table: 'chat_messages',
+      )
+      // Detect user intent using simple keyword matching
+      .function(
+        name: 'Detect Intent',
+        code: r'''
+const message = ($input.item.json.message || '').toLowerCase();
+
+let intent = 'general';
+let needsInteraction = false;
+
+// Booking intent
+if (message.includes('book') || message.includes('reservation') || message.includes('appointment')) {
+  intent = 'booking';
+  needsInteraction = true;
+}
+// Help/Support intent
+else if (message.includes('help') || message.includes('support') || message.includes('assistance')) {
+  intent = 'support';
+}
+// Greeting
+else if (message.includes('hello') || message.includes('hi') || message.includes('hey')) {
+  intent = 'greeting';
+}
+// Flight search
+else if (message.includes('flight') || message.includes('travel') || message.includes('trip')) {
+  intent = 'flight_search';
+  needsInteraction = true;
+}
+
+return [{
+  json: {
+    ...$input.item.json,
+    intent: intent,
+    needsInteraction: needsInteraction
+  }
+}];
+''',
+      )
+      // Route based on intent
+      .ifNode(
+        name: 'Needs Interaction?',
+        conditions: [
+          {
+            'leftValue': r'={{$json.needsInteraction}}',
+            'operation': 'equals',
+            'rightValue': true,
+          }
+        ],
+      )
+      // Simple response path (no interaction needed)
+      .newRow()
+      .function(
+        name: 'Generate Simple Response',
+        code: r'''
+const intent = $input.item.json.intent;
+
+const responses = {
+  greeting: 'Hello! How can I help you today? You can ask me about bookings, flights, or support.',
+  support: 'I\'m here to help! What do you need assistance with?',
+  general: 'I can help you with bookings, flights, and more. What would you like to do?'
+};
+
+return [{
+  json: {
+    message: responses[intent] || responses.general,
+    type: 'text'
+  }
+}];
+''',
+      )
+      .respondToWebhook(
+        name: 'Send Simple Response',
+        responseCode: 200,
+        responseBody: {
+          'message': r'={{$json.message}}',
+          'type': 'text',
+        },
+      )
+      // Interactive path - Flight Search
+      .newRow()
+      .ifNode(
+        name: 'Flight Search?',
+        conditions: [
+          {
+            'leftValue': r'={{$json.intent}}',
+            'operation': 'equals',
+            'rightValue': 'flight_search',
+          }
+        ],
+      )
+      // Flight search flow
+      .newRow()
+      .waitNode(
+        name: 'Ask Destination',
+        waitType: 'webhook',
+        additionalParams: {
+          'options': {
+            'metadata': {
+              'message': 'Where would you like to go?',
+              'interactionType': 'quick-reply',
+              'options': [
+                {'id': 'nyc', 'label': 'New York', 'emoji': '🗽', 'value': 'NYC'},
+                {'id': 'lax', 'label': 'Los Angeles', 'emoji': '🌴', 'value': 'LAX'},
+                {'id': 'ord', 'label': 'Chicago', 'emoji': '🌆', 'value': 'ORD'},
+                {'id': 'mia', 'label': 'Miami', 'emoji': '🏖️', 'value': 'MIA'},
+              ]
+            }
+          }
+        },
+      )
+      .function(
+        name: 'Process Destination',
+        code: r'''
+const selection = $input.item.json.selection || 'NYC';
+
+return [{
+  json: {
+    destination: selection,
+    destinationName: selection
+  }
+}];
+''',
+      )
+      .waitNode(
+        name: 'Ask Travel Date',
+        waitType: 'webhook',
+        additionalParams: {
+          'options': {
+            'metadata': {
+              'message': 'When would you like to travel?',
+              'interactionType': 'quick-reply',
+              'options': [
+                {'id': 'tomorrow', 'label': 'Tomorrow', 'emoji': '📅', 'value': 'tomorrow'},
+                {'id': 'weekend', 'label': 'This Weekend', 'emoji': '🎉', 'value': 'weekend'},
+                {'id': 'next_week', 'label': 'Next Week', 'emoji': '📆', 'value': 'next_week'},
+              ]
+            }
+          }
+        },
+      )
+      .function(
+        name: 'Calculate Date',
+        code: r'''
+const dateSelection = $input.item.json.selection || 'tomorrow';
+
+let travelDate = new Date();
+
+if (dateSelection === 'tomorrow') {
+  travelDate.setDate(travelDate.getDate() + 1);
+} else if (dateSelection === 'weekend') {
+  const dayOfWeek = travelDate.getDay();
+  const daysUntilSaturday = (6 - dayOfWeek + 7) % 7;
+  travelDate.setDate(travelDate.getDate() + daysUntilSaturday);
+} else if (dateSelection === 'next_week') {
+  travelDate.setDate(travelDate.getDate() + 7);
+}
+
+return [{
+  json: {
+    ...$input.item.json,
+    travelDate: travelDate.toISOString().split('T')[0],
+    dateSelection: dateSelection
+  }
+}];
+''',
+      )
+      .waitNode(
+        name: 'Ask Passengers',
+        waitType: 'webhook',
+        additionalParams: {
+          'options': {
+            'metadata': {
+              'message': 'How many passengers?',
+              'interactionType': 'quick-reply',
+              'options': [
+                {'id': '1', 'label': '1', 'value': 1},
+                {'id': '2', 'label': '2', 'value': 2},
+                {'id': '3', 'label': '3', 'value': 3},
+                {'id': '4', 'label': '4+', 'value': 4},
+              ]
+            }
+          }
+        },
+      )
+      .function(
+        name: 'Search Flights',
+        code: r'''
+const passengers = $input.item.json.selection || 1;
+const destination = $input.item.json.destination || 'NYC';
+const travelDate = $input.item.json.travelDate || new Date().toISOString().split('T')[0];
+
+// Mock flight search results
+const flights = [
+  {
+    id: 'AA123',
+    airline: 'American Airlines',
+    flightNumber: 'AA 123',
+    price: 450,
+    departure: '10:00 AM',
+    arrival: '1:30 PM',
+    duration: '3h 30m',
+    imageUrl: 'https://images.unsplash.com/photo-1436491865332-7a61a109cc05?w=400'
+  },
+  {
+    id: 'UA456',
+    airline: 'United Airlines',
+    flightNumber: 'UA 456',
+    price: 520,
+    departure: '2:00 PM',
+    arrival: '5:45 PM',
+    duration: '3h 45m',
+    imageUrl: 'https://images.unsplash.com/photo-1464037866556-6812c9d1c72e?w=400'
+  },
+  {
+    id: 'DL789',
+    airline: 'Delta Airlines',
+    flightNumber: 'DL 789',
+    price: 480,
+    departure: '6:30 PM',
+    arrival: '10:00 PM',
+    duration: '3h 30m',
+    imageUrl: 'https://images.unsplash.com/photo-1556388158-158ea5ccacbd?w=400'
+  }
+];
+
+return [{
+  json: {
+    destination: destination,
+    travelDate: travelDate,
+    passengers: passengers,
+    flights: flights
+  }
+}];
+''',
+      )
+      .waitNode(
+        name: 'Show Flight Options',
+        waitType: 'webhook',
+        additionalParams: {
+          'options': {
+            'metadata': {
+              'message': 'Here are available flights:',
+              'interactionType': 'carousel',
+              'carousel': r'''={{$json.flights.map(f => ({
+                id: f.id,
+                title: f.airline + ' - ' + f.flightNumber,
+                subtitle: '$' + f.price + ' • ' + f.departure + ' - ' + f.arrival + ' • ' + f.duration,
+                imageUrl: f.imageUrl,
+                actions: [
+                  { id: 'select', label: 'Select', type: 'primary' },
+                  { id: 'details', label: 'View Details', type: 'secondary' }
+                ]
+              }))}}''',
+            }
+          }
+        },
+      )
+      .function(
+        name: 'Process Flight Selection',
+        code: r'''
+const cardId = $input.item.json.cardId || 'AA123';
+const action = $input.item.json.action || 'select';
+const flights = $input.item.json.flights || [];
+
+// Find selected flight
+const selectedFlight = flights.find(f => f.id === cardId) || flights[0];
+
+if (action === 'details') {
+  return [{
+    json: {
+      message: `Flight Details:\n\n${selectedFlight.airline}\nFlight: ${selectedFlight.flightNumber}\nPrice: $${selectedFlight.price}\nDeparture: ${selectedFlight.departure}\nArrival: ${selectedFlight.arrival}\nDuration: ${selectedFlight.duration}`,
+      showDetails: true
+    }
+  }];
+}
+
+return [{
+  json: {
+    ...$input.item.json,
+    selectedFlight: selectedFlight,
+    flightId: cardId
+  }
+}];
+''',
+      )
+      .waitNode(
+        name: 'Ask Extras',
+        waitType: 'webhook',
+        additionalParams: {
+          'options': {
+            'metadata': {
+              'message': 'Would you like to add any extras?',
+              'interactionType': 'chips',
+              'chips': [
+                {'id': 'wifi', 'label': r'WiFi ($15)'},
+                {'id': 'extra_legroom', 'label': r'Extra Legroom ($30)'},
+                {'id': 'priority', 'label': r'Priority Boarding ($25)'},
+                {'id': 'meal', 'label': r'Premium Meal ($20)'},
+              ]
+            }
+          }
+        },
+      )
+      .function(
+        name: 'Calculate Total',
+        code: r'''
+const selectedExtras = $input.item.json.selections || [];
+const selectedFlight = $input.item.json.selectedFlight || { price: 450 };
+const passengers = $input.item.json.passengers || 1;
+
+const extraPrices = {
+  wifi: 15,
+  extra_legroom: 30,
+  priority: 25,
+  meal: 20
+};
+
+let extrasTotal = 0;
+const extrasDetails = [];
+
+selectedExtras.forEach(extra => {
+  const price = extraPrices[extra] || 0;
+  extrasTotal += price;
+  extrasDetails.push({
+    name: extra.replace('_', ' '),
+    price: price
+  });
+});
+
+const subtotal = selectedFlight.price * passengers;
+const extrasAmount = extrasTotal * passengers;
+const tax = (subtotal + extrasAmount) * 0.10;
+const total = subtotal + extrasAmount + tax;
+
+return [{
+  json: {
+    ...$input.item.json,
+    extras: extrasDetails,
+    extrasAmount: extrasAmount,
+    subtotal: subtotal,
+    tax: tax.toFixed(2),
+    total: total.toFixed(2)
+  }
+}];
+''',
+      )
+      .waitNode(
+        name: 'Confirm Booking',
+        waitType: 'webhook',
+        additionalParams: {
+          'options': {
+            'metadata': {
+              'message': r'''={"text": "Confirm your booking:\n\nFlight: " + $json.selectedFlight.flightNumber + "\nPassengers: " + $json.passengers + "\nExtras: " + $json.extras.length + " items\nTotal: $" + $json.total, "type": "confirm"}''',
+              'interactionType': 'confirm',
+              'confirmMessage': r'={{$json.text}}',
+            }
+          }
+        },
+      )
+      .function(
+        name: 'Process Confirmation',
+        code: r'''
+const confirmed = $input.item.json.confirmed || false;
+
+if (!confirmed) {
+  return [{
+    json: {
+      message: 'Booking cancelled. Feel free to start a new search anytime!',
+      cancelled: true
+    }
+  }];
+}
+
+// Generate booking confirmation
+const bookingId = `BK${Date.now()}`;
+const confirmationCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+
+return [{
+  json: {
+    ...$input.item.json,
+    confirmed: true,
+    bookingId: bookingId,
+    confirmationCode: confirmationCode,
+    status: 'confirmed'
+  }
+}];
+''',
+      )
+      .postgres(
+        name: 'Save Booking',
+        operation: 'insert',
+        table: 'flight_bookings',
+      )
+      .function(
+        name: 'Build Confirmation Message',
+        code: r'''
+const data = $input.item.json;
+
+const message = `✅ Booking Confirmed!
+
+Confirmation Code: ${data.confirmationCode}
+Booking ID: ${data.bookingId}
+
+Flight: ${data.selectedFlight.flightNumber}
+Date: ${data.travelDate}
+Passengers: ${data.passengers}
+Total: $${data.total}
+
+We've sent a confirmation email with your ticket details.`;
+
+return [{
+  json: {
+    message: message,
+    bookingId: data.bookingId,
+    confirmationCode: data.confirmationCode
+  }
+}];
+''',
+      )
+      .respondToWebhook(
+        name: 'Send Confirmation',
+        responseCode: 200,
+        responseBody: {
+          'message': r'={{$json.message}}',
+          'bookingId': r'={{$json.bookingId}}',
+          'confirmationCode': r'={{$json.confirmationCode}}',
+          'type': 'text',
+        },
+      )
+      // Booking flow (alternative path)
+      .newRow()
+      .function(
+        name: 'Default Booking Response',
+        code: r'''
+return [{
+  json: {
+    message: 'I can help you with bookings! Please tell me more about what you\'d like to book.',
+    type: 'text'
+  }
+}];
+''',
+      )
+      .respondToWebhook(
+        name: 'Send Booking Response',
+        responseCode: 200,
+        responseBody: {
+          'message': r'={{$json.message}}',
+          'type': 'text',
+        },
+      )
+      // Connect all nodes
+      .connect('Chat Webhook', 'Parse Message')
+      .connect('Parse Message', 'Save Message')
+      .connect('Save Message', 'Detect Intent')
+      .connect('Detect Intent', 'Needs Interaction?')
+      // Simple response path
+      .connect('Needs Interaction?', 'Generate Simple Response', sourceIndex: 1)
+      .connect('Generate Simple Response', 'Send Simple Response')
+      // Interactive path
+      .connect('Needs Interaction?', 'Flight Search?', sourceIndex: 0)
+      // Flight search flow
+      .connect('Flight Search?', 'Ask Destination', sourceIndex: 0)
+      .connect('Ask Destination', 'Process Destination')
+      .connect('Process Destination', 'Ask Travel Date')
+      .connect('Ask Travel Date', 'Calculate Date')
+      .connect('Calculate Date', 'Ask Passengers')
+      .connect('Ask Passengers', 'Search Flights')
+      .connect('Search Flights', 'Show Flight Options')
+      .connect('Show Flight Options', 'Process Flight Selection')
+      .connect('Process Flight Selection', 'Ask Extras')
+      .connect('Ask Extras', 'Calculate Total')
+      .connect('Calculate Total', 'Confirm Booking')
+      .connect('Confirm Booking', 'Process Confirmation')
+      .connect('Process Confirmation', 'Save Booking')
+      .connect('Save Booking', 'Build Confirmation Message')
+      .connect('Build Confirmation Message', 'Send Confirmation')
+      // Booking path
+      .connect('Flight Search?', 'Default Booking Response', sourceIndex: 1)
+      .connect('Default Booking Response', 'Send Booking Response')
+      .build();
+
+  await workflow.saveToFile('$outputPath/20_interactive_chat_flutter.json');
+  print('   ✓ Generated: 20_interactive_chat_flutter.json');
+  print('   📱 Perfect for Flutter apps with n8n_dart!');
+  print('   ✨ Supports: Quick Replies, Cards, Carousels, Chips, Confirmations\n');
 }

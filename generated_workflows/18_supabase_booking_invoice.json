@@ -4,7 +4,7 @@
   "version": 1.0,
   "nodes": [
     {
-      "id": "1760003021949_164",
+      "id": "1760018584130_164",
       "name": "Booking Completed",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1,
@@ -19,7 +19,7 @@
       }
     },
     {
-      "id": "1760003021949_165",
+      "id": "1760018584130_165",
       "name": "Validate Booking ID",
       "type": "n8n-nodes-base.function",
       "typeVersion": 1,
@@ -32,7 +32,7 @@
       }
     },
     {
-      "id": "1760003021949_166",
+      "id": "1760018584130_166",
       "name": "Get Booking from Supabase",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 1,
@@ -50,7 +50,7 @@
       }
     },
     {
-      "id": "1760003021949_167",
+      "id": "1760018584130_167",
       "name": "Prepare Booking Data",
       "type": "n8n-nodes-base.function",
       "typeVersion": 1,
@@ -63,7 +63,7 @@
       }
     },
     {
-      "id": "1760003021949_168",
+      "id": "1760018584130_168",
       "name": "Booking Completed?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 1,
@@ -82,7 +82,7 @@
       }
     },
     {
-      "id": "1760003021949_169",
+      "id": "1760018584130_169",
       "name": "Return Not Completed",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
@@ -101,7 +101,7 @@
       }
     },
     {
-      "id": "1760003021949_170",
+      "id": "1760018584130_170",
       "name": "Calculate Invoice",
       "type": "n8n-nodes-base.function",
       "typeVersion": 1,
@@ -114,7 +114,7 @@
       }
     },
     {
-      "id": "1760003021949_171",
+      "id": "1760018584130_171",
       "name": "Create Invoice in Supabase",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 1,
@@ -156,7 +156,7 @@
       }
     },
     {
-      "id": "1760003021949_172",
+      "id": "1760018584130_172",
       "name": "Prepare Invoice Data",
       "type": "n8n-nodes-base.function",
       "typeVersion": 1,
@@ -169,7 +169,7 @@
       }
     },
     {
-      "id": "1760003021949_173",
+      "id": "1760018584130_173",
       "name": "Link Invoice to Booking",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 1,
@@ -193,7 +193,7 @@
       }
     },
     {
-      "id": "1760003021949_174",
+      "id": "1760018584130_174",
       "name": "Generate Invoice PDF",
       "type": "n8n-nodes-base.function",
       "typeVersion": 1,
@@ -206,7 +206,7 @@
       }
     },
     {
-      "id": "1760003021949_175",
+      "id": "1760018584130_175",
       "name": "Email Invoice to Customer",
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 1,
@@ -222,7 +222,7 @@
       }
     },
     {
-      "id": "1760003021949_176",
+      "id": "1760018584130_176",
       "name": "Notify Accounting",
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 1,
@@ -238,7 +238,7 @@
       }
     },
     {
-      "id": "1760003021949_177",
+      "id": "1760018584130_177",
       "name": "Log Activity in Supabase",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 1,
@@ -268,7 +268,7 @@
       }
     },
     {
-      "id": "1760003021949_178",
+      "id": "1760018584130_178",
       "name": "Notify Team",
       "type": "n8n-nodes-base.slack",
       "typeVersion": 1,
@@ -288,7 +288,7 @@
       }
     },
     {
-      "id": "1760003021949_179",
+      "id": "1760018584130_179",
       "name": "Return Success",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,

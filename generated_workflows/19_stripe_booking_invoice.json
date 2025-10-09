@@ -4,7 +4,7 @@
   "version": 1.0,
   "nodes": [
     {
-      "id": "1760003021951_180",
+      "id": "1760018584132_180",
       "name": "Stripe Checkout Completed",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1,
@@ -19,7 +19,7 @@
       }
     },
     {
-      "id": "1760003021951_181",
+      "id": "1760018584132_181",
       "name": "Validate Stripe Webhook",
       "type": "n8n-nodes-base.function",
       "typeVersion": 1,
@@ -32,7 +32,7 @@
       }
     },
     {
-      "id": "1760003021951_182",
+      "id": "1760018584132_182",
       "name": "Payment Successful?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 1,
@@ -51,7 +51,7 @@
       }
     },
     {
-      "id": "1760003021951_183",
+      "id": "1760018584132_183",
       "name": "Log Failed Payment",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 1,
@@ -77,7 +77,7 @@
       }
     },
     {
-      "id": "1760003021951_184",
+      "id": "1760018584132_184",
       "name": "Return Payment Failed",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
@@ -95,7 +95,7 @@
       }
     },
     {
-      "id": "1760003021951_185",
+      "id": "1760018584132_185",
       "name": "Create Booking in Supabase",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 1,
@@ -131,7 +131,7 @@
       }
     },
     {
-      "id": "1760003021951_186",
+      "id": "1760018584132_186",
       "name": "Get Service Details",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 1,
@@ -149,7 +149,7 @@
       }
     },
     {
-      "id": "1760003021951_187",
+      "id": "1760018584132_187",
       "name": "Prepare Booking Confirmation",
       "type": "n8n-nodes-base.function",
       "typeVersion": 1,
@@ -162,7 +162,7 @@
       }
     },
     {
-      "id": "1760003021951_188",
+      "id": "1760018584132_188",
       "name": "Update Booking Confirmation",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 1,
@@ -185,7 +185,7 @@
       }
     },
     {
-      "id": "1760003021951_189",
+      "id": "1760018584132_189",
       "name": "Calculate Invoice",
       "type": "n8n-nodes-base.function",
       "typeVersion": 1,
@@ -198,7 +198,7 @@
       }
     },
     {
-      "id": "1760003021951_190",
+      "id": "1760018584132_190",
       "name": "Create Invoice in Supabase",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 1,
@@ -243,7 +243,7 @@
       }
     },
     {
-      "id": "1760003021951_191",
+      "id": "1760018584132_191",
       "name": "Prepare Email Data",
       "type": "n8n-nodes-base.function",
       "typeVersion": 1,
@@ -256,7 +256,7 @@
       }
     },
     {
-      "id": "1760003021951_192",
+      "id": "1760018584132_192",
       "name": "Send Confirmation & Receipt",
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 1,
@@ -272,7 +272,7 @@
       }
     },
     {
-      "id": "1760003021951_193",
+      "id": "1760018584132_193",
       "name": "Notify Accounting",
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 1,
@@ -288,7 +288,7 @@
       }
     },
     {
-      "id": "1760003021951_194",
+      "id": "1760018584132_194",
       "name": "Update Customer Stripe ID",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 1,
@@ -311,7 +311,7 @@
       }
     },
     {
-      "id": "1760003021951_195",
+      "id": "1760018584132_195",
       "name": "Log Payment Activity",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 1,
@@ -342,7 +342,7 @@
       }
     },
     {
-      "id": "1760003021951_196",
+      "id": "1760018584132_196",
       "name": "Notify Team",
       "type": "n8n-nodes-base.slack",
       "typeVersion": 1,
@@ -362,7 +362,7 @@
       }
     },
     {
-      "id": "1760003021951_197",
+      "id": "1760018584132_197",
       "name": "Return Success",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,

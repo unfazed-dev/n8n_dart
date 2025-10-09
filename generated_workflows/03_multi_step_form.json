@@ -4,7 +4,7 @@
   "version": 1.0,
   "nodes": [
     {
-      "id": "1760003021934_14",
+      "id": "1760018584113_14",
       "name": "Start Onboarding",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1,
@@ -19,7 +19,7 @@
       }
     },
     {
-      "id": "1760003021934_15",
+      "id": "1760018584113_15",
       "name": "Initialize Session",
       "type": "n8n-nodes-base.function",
       "typeVersion": 1,
@@ -32,7 +32,7 @@
       }
     },
     {
-      "id": "1760003021934_16",
+      "id": "1760018584113_16",
       "name": "Wait for Personal Info",
       "type": "n8n-nodes-base.wait",
       "typeVersion": 1,
@@ -45,7 +45,7 @@
       }
     },
     {
-      "id": "1760003021934_17",
+      "id": "1760018584113_17",
       "name": "Process Personal Info",
       "type": "n8n-nodes-base.function",
       "typeVersion": 1,
@@ -58,7 +58,7 @@
       }
     },
     {
-      "id": "1760003021934_18",
+      "id": "1760018584113_18",
       "name": "Wait for Preferences",
       "type": "n8n-nodes-base.wait",
       "typeVersion": 1,
@@ -71,7 +71,7 @@
       }
     },
     {
-      "id": "1760003021934_19",
+      "id": "1760018584113_19",
       "name": "Process Preferences",
       "type": "n8n-nodes-base.function",
       "typeVersion": 1,
@@ -84,7 +84,7 @@
       }
     },
     {
-      "id": "1760003021934_20",
+      "id": "1760018584113_20",
       "name": "Save Onboarding Data",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 1,
@@ -104,7 +104,7 @@
       }
     },
     {
-      "id": "1760003021934_21",
+      "id": "1760018584113_21",
       "name": "Send Welcome Email",
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 1,
@@ -120,7 +120,7 @@
       }
     },
     {
-      "id": "1760003021934_22",
+      "id": "1760018584113_22",
       "name": "Return Completion",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,

@@ -4,7 +4,7 @@
   "version": 1.0,
   "nodes": [
     {
-      "id": "1760003021938_44",
+      "id": "1760018584117_44",
       "name": "Order Received",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1,
@@ -19,7 +19,7 @@
       }
     },
     {
-      "id": "1760003021938_45",
+      "id": "1760018584117_45",
       "name": "Calculate Order Total",
       "type": "n8n-nodes-base.function",
       "typeVersion": 1,
@@ -32,7 +32,7 @@
       }
     },
     {
-      "id": "1760003021938_46",
+      "id": "1760018584117_46",
       "name": "Check Inventory",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 1,
@@ -52,7 +52,7 @@
       }
     },
     {
-      "id": "1760003021938_47",
+      "id": "1760018584117_47",
       "name": "Inventory Available?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 1,
@@ -71,7 +71,7 @@
       }
     },
     {
-      "id": "1760003021938_48",
+      "id": "1760018584117_48",
       "name": "Notify Out of Stock",
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 1,
@@ -87,7 +87,7 @@
       }
     },
     {
-      "id": "1760003021938_49",
+      "id": "1760018584117_49",
       "name": "Return Out of Stock",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
@@ -105,7 +105,7 @@
       }
     },
     {
-      "id": "1760003021938_50",
+      "id": "1760018584117_50",
       "name": "Process Payment",
       "type": "n8n-nodes-base.stripe",
       "typeVersion": 1,
@@ -127,7 +127,7 @@
       }
     },
     {
-      "id": "1760003021938_51",
+      "id": "1760018584117_51",
       "name": "Payment Successful?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 1,
@@ -146,7 +146,7 @@
       }
     },
     {
-      "id": "1760003021938_52",
+      "id": "1760018584118_52",
       "name": "Save Failed Order",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 1,
@@ -166,7 +166,7 @@
       }
     },
     {
-      "id": "1760003021938_53",
+      "id": "1760018584118_53",
       "name": "Payment Failed Email",
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 1,
@@ -182,7 +182,7 @@
       }
     },
     {
-      "id": "1760003021938_54",
+      "id": "1760018584118_54",
       "name": "Create Order Record",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 1,
@@ -202,7 +202,7 @@
       }
     },
     {
-      "id": "1760003021938_55",
+      "id": "1760018584118_55",
       "name": "Update Inventory",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 1,
@@ -222,7 +222,7 @@
       }
     },
     {
-      "id": "1760003021938_56",
+      "id": "1760018584118_56",
       "name": "Notify Fulfillment Team",
       "type": "n8n-nodes-base.slack",
       "typeVersion": 1,
@@ -242,7 +242,7 @@
       }
     },
     {
-      "id": "1760003021938_57",
+      "id": "1760018584118_57",
       "name": "Order Confirmation Email",
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 1,
@@ -258,7 +258,7 @@
       }
     },
     {
-      "id": "1760003021938_58",
+      "id": "1760018584118_58",
       "name": "Return Success",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,

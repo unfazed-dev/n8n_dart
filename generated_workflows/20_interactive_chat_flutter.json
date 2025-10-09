@@ -1,0 +1,770 @@
+{
+  "name": "Interactive Chat Assistant - Flutter",
+  "active": true,
+  "version": 1.0,
+  "nodes": [
+    {
+      "id": "1760018584134_198",
+      "name": "Chat Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        100.0,
+        200.0
+      ],
+      "parameters": {
+        "path": "chat/interactive",
+        "method": "POST",
+        "authentication": "none"
+      }
+    },
+    {
+      "id": "1760018584134_199",
+      "name": "Parse Message",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        350.0,
+        200.0
+      ],
+      "parameters": {
+        "functionCode": "const msg = $input.item.json;\n\nreturn [{\n  json: {\n    message: msg.message || msg.text || '',\n    conversationId: msg.conversationId || 'unknown',\n    userId: msg.userId || 'anonymous',\n    timestamp: msg.timestamp || new Date().toISOString(),\n    messageId: `msg_${Date.now()}`\n  }\n}];\n"
+      }
+    },
+    {
+      "id": "1760018584134_200",
+      "name": "Save Message",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [
+        600.0,
+        200.0
+      ],
+      "parameters": {
+        "operation": "insert",
+        "table": "chat_messages"
+      },
+      "credentials": {
+        "postgres": {
+          "id": "credential_id",
+          "name": "PostgreSQL"
+        }
+      }
+    },
+    {
+      "id": "1760018584134_201",
+      "name": "Detect Intent",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        850.0,
+        200.0
+      ],
+      "parameters": {
+        "functionCode": "const message = ($input.item.json.message || '').toLowerCase();\n\nlet intent = 'general';\nlet needsInteraction = false;\n\n// Booking intent\nif (message.includes('book') || message.includes('reservation') || message.includes('appointment')) {\n  intent = 'booking';\n  needsInteraction = true;\n}\n// Help/Support intent\nelse if (message.includes('help') || message.includes('support') || message.includes('assistance')) {\n  intent = 'support';\n}\n// Greeting\nelse if (message.includes('hello') || message.includes('hi') || message.includes('hey')) {\n  intent = 'greeting';\n}\n// Flight search\nelse if (message.includes('flight') || message.includes('travel') || message.includes('trip')) {\n  intent = 'flight_search';\n  needsInteraction = true;\n}\n\nreturn [{\n  json: {\n    ...$input.item.json,\n    intent: intent,\n    needsInteraction: needsInteraction\n  }\n}];\n"
+      }
+    },
+    {
+      "id": "1760018584134_202",
+      "name": "Needs Interaction?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        1100.0,
+        200.0
+      ],
+      "parameters": {
+        "conditions": [
+          {
+            "leftValue": "={{$json.needsInteraction}}",
+            "operation": "equals",
+            "rightValue": true
+          }
+        ]
+      }
+    },
+    {
+      "id": "1760018584134_203",
+      "name": "Generate Simple Response",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        100.0,
+        300.0
+      ],
+      "parameters": {
+        "functionCode": "const intent = $input.item.json.intent;\n\nconst responses = {\n  greeting: 'Hello! How can I help you today? You can ask me about bookings, flights, or support.',\n  support: 'I\\'m here to help! What do you need assistance with?',\n  general: 'I can help you with bookings, flights, and more. What would you like to do?'\n};\n\nreturn [{\n  json: {\n    message: responses[intent] || responses.general,\n    type: 'text'\n  }\n}];\n"
+      }
+    },
+    {
+      "id": "1760018584134_204",
+      "name": "Send Simple Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        350.0,
+        300.0
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseCode": 200,
+        "responseBody": {
+          "message": "={{$json.message}}",
+          "type": "text"
+        }
+      }
+    },
+    {
+      "id": "1760018584134_205",
+      "name": "Flight Search?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        100.0,
+        400.0
+      ],
+      "parameters": {
+        "conditions": [
+          {
+            "leftValue": "={{$json.intent}}",
+            "operation": "equals",
+            "rightValue": "flight_search"
+          }
+        ]
+      }
+    },
+    {
+      "id": "1760018584134_206",
+      "name": "Ask Destination",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [
+        100.0,
+        500.0
+      ],
+      "parameters": {
+        "resume": "webhook",
+        "options": {
+          "metadata": {
+            "message": "Where would you like to go?",
+            "interactionType": "quick-reply",
+            "options": [
+              {
+                "id": "nyc",
+                "label": "New York",
+                "emoji": "🗽",
+                "value": "NYC"
+              },
+              {
+                "id": "lax",
+                "label": "Los Angeles",
+                "emoji": "🌴",
+                "value": "LAX"
+              },
+              {
+                "id": "ord",
+                "label": "Chicago",
+                "emoji": "🌆",
+                "value": "ORD"
+              },
+              {
+                "id": "mia",
+                "label": "Miami",
+                "emoji": "🏖️",
+                "value": "MIA"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "1760018584134_207",
+      "name": "Process Destination",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        350.0,
+        500.0
+      ],
+      "parameters": {
+        "functionCode": "const selection = $input.item.json.selection || 'NYC';\n\nreturn [{\n  json: {\n    destination: selection,\n    destinationName: selection\n  }\n}];\n"
+      }
+    },
+    {
+      "id": "1760018584134_208",
+      "name": "Ask Travel Date",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [
+        600.0,
+        500.0
+      ],
+      "parameters": {
+        "resume": "webhook",
+        "options": {
+          "metadata": {
+            "message": "When would you like to travel?",
+            "interactionType": "quick-reply",
+            "options": [
+              {
+                "id": "tomorrow",
+                "label": "Tomorrow",
+                "emoji": "📅",
+                "value": "tomorrow"
+              },
+              {
+                "id": "weekend",
+                "label": "This Weekend",
+                "emoji": "🎉",
+                "value": "weekend"
+              },
+              {
+                "id": "next_week",
+                "label": "Next Week",
+                "emoji": "📆",
+                "value": "next_week"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "1760018584134_209",
+      "name": "Calculate Date",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        850.0,
+        500.0
+      ],
+      "parameters": {
+        "functionCode": "const dateSelection = $input.item.json.selection || 'tomorrow';\n\nlet travelDate = new Date();\n\nif (dateSelection === 'tomorrow') {\n  travelDate.setDate(travelDate.getDate() + 1);\n} else if (dateSelection === 'weekend') {\n  const dayOfWeek = travelDate.getDay();\n  const daysUntilSaturday = (6 - dayOfWeek + 7) % 7;\n  travelDate.setDate(travelDate.getDate() + daysUntilSaturday);\n} else if (dateSelection === 'next_week') {\n  travelDate.setDate(travelDate.getDate() + 7);\n}\n\nreturn [{\n  json: {\n    ...$input.item.json,\n    travelDate: travelDate.toISOString().split('T')[0],\n    dateSelection: dateSelection\n  }\n}];\n"
+      }
+    },
+    {
+      "id": "1760018584134_210",
+      "name": "Ask Passengers",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [
+        1100.0,
+        500.0
+      ],
+      "parameters": {
+        "resume": "webhook",
+        "options": {
+          "metadata": {
+            "message": "How many passengers?",
+            "interactionType": "quick-reply",
+            "options": [
+              {
+                "id": "1",
+                "label": "1",
+                "value": 1
+              },
+              {
+                "id": "2",
+                "label": "2",
+                "value": 2
+              },
+              {
+                "id": "3",
+                "label": "3",
+                "value": 3
+              },
+              {
+                "id": "4",
+                "label": "4+",
+                "value": 4
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "1760018584134_211",
+      "name": "Search Flights",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        1350.0,
+        500.0
+      ],
+      "parameters": {
+        "functionCode": "const passengers = $input.item.json.selection || 1;\nconst destination = $input.item.json.destination || 'NYC';\nconst travelDate = $input.item.json.travelDate || new Date().toISOString().split('T')[0];\n\n// Mock flight search results\nconst flights = [\n  {\n    id: 'AA123',\n    airline: 'American Airlines',\n    flightNumber: 'AA 123',\n    price: 450,\n    departure: '10:00 AM',\n    arrival: '1:30 PM',\n    duration: '3h 30m',\n    imageUrl: 'https://images.unsplash.com/photo-1436491865332-7a61a109cc05?w=400'\n  },\n  {\n    id: 'UA456',\n    airline: 'United Airlines',\n    flightNumber: 'UA 456',\n    price: 520,\n    departure: '2:00 PM',\n    arrival: '5:45 PM',\n    duration: '3h 45m',\n    imageUrl: 'https://images.unsplash.com/photo-1464037866556-6812c9d1c72e?w=400'\n  },\n  {\n    id: 'DL789',\n    airline: 'Delta Airlines',\n    flightNumber: 'DL 789',\n    price: 480,\n    departure: '6:30 PM',\n    arrival: '10:00 PM',\n    duration: '3h 30m',\n    imageUrl: 'https://images.unsplash.com/photo-1556388158-158ea5ccacbd?w=400'\n  }\n];\n\nreturn [{\n  json: {\n    destination: destination,\n    travelDate: travelDate,\n    passengers: passengers,\n    flights: flights\n  }\n}];\n"
+      }
+    },
+    {
+      "id": "1760018584134_212",
+      "name": "Show Flight Options",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [
+        1600.0,
+        500.0
+      ],
+      "parameters": {
+        "resume": "webhook",
+        "options": {
+          "metadata": {
+            "message": "Here are available flights:",
+            "interactionType": "carousel",
+            "carousel": "={{$json.flights.map(f => ({\n                id: f.id,\n                title: f.airline + ' - ' + f.flightNumber,\n                subtitle: '$' + f.price + ' • ' + f.departure + ' - ' + f.arrival + ' • ' + f.duration,\n                imageUrl: f.imageUrl,\n                actions: [\n                  { id: 'select', label: 'Select', type: 'primary' },\n                  { id: 'details', label: 'View Details', type: 'secondary' }\n                ]\n              }))}}"
+          }
+        }
+      }
+    },
+    {
+      "id": "1760018584134_213",
+      "name": "Process Flight Selection",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        1850.0,
+        500.0
+      ],
+      "parameters": {
+        "functionCode": "const cardId = $input.item.json.cardId || 'AA123';\nconst action = $input.item.json.action || 'select';\nconst flights = $input.item.json.flights || [];\n\n// Find selected flight\nconst selectedFlight = flights.find(f => f.id === cardId) || flights[0];\n\nif (action === 'details') {\n  return [{\n    json: {\n      message: `Flight Details:\\n\\n${selectedFlight.airline}\\nFlight: ${selectedFlight.flightNumber}\\nPrice: $${selectedFlight.price}\\nDeparture: ${selectedFlight.departure}\\nArrival: ${selectedFlight.arrival}\\nDuration: ${selectedFlight.duration}`,\n      showDetails: true\n    }\n  }];\n}\n\nreturn [{\n  json: {\n    ...$input.item.json,\n    selectedFlight: selectedFlight,\n    flightId: cardId\n  }\n}];\n"
+      }
+    },
+    {
+      "id": "1760018584134_214",
+      "name": "Ask Extras",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [
+        2100.0,
+        500.0
+      ],
+      "parameters": {
+        "resume": "webhook",
+        "options": {
+          "metadata": {
+            "message": "Would you like to add any extras?",
+            "interactionType": "chips",
+            "chips": [
+              {
+                "id": "wifi",
+                "label": "WiFi ($15)"
+              },
+              {
+                "id": "extra_legroom",
+                "label": "Extra Legroom ($30)"
+              },
+              {
+                "id": "priority",
+                "label": "Priority Boarding ($25)"
+              },
+              {
+                "id": "meal",
+                "label": "Premium Meal ($20)"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "1760018584134_215",
+      "name": "Calculate Total",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        2350.0,
+        500.0
+      ],
+      "parameters": {
+        "functionCode": "const selectedExtras = $input.item.json.selections || [];\nconst selectedFlight = $input.item.json.selectedFlight || { price: 450 };\nconst passengers = $input.item.json.passengers || 1;\n\nconst extraPrices = {\n  wifi: 15,\n  extra_legroom: 30,\n  priority: 25,\n  meal: 20\n};\n\nlet extrasTotal = 0;\nconst extrasDetails = [];\n\nselectedExtras.forEach(extra => {\n  const price = extraPrices[extra] || 0;\n  extrasTotal += price;\n  extrasDetails.push({\n    name: extra.replace('_', ' '),\n    price: price\n  });\n});\n\nconst subtotal = selectedFlight.price * passengers;\nconst extrasAmount = extrasTotal * passengers;\nconst tax = (subtotal + extrasAmount) * 0.10;\nconst total = subtotal + extrasAmount + tax;\n\nreturn [{\n  json: {\n    ...$input.item.json,\n    extras: extrasDetails,\n    extrasAmount: extrasAmount,\n    subtotal: subtotal,\n    tax: tax.toFixed(2),\n    total: total.toFixed(2)\n  }\n}];\n"
+      }
+    },
+    {
+      "id": "1760018584134_216",
+      "name": "Confirm Booking",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [
+        2600.0,
+        500.0
+      ],
+      "parameters": {
+        "resume": "webhook",
+        "options": {
+          "metadata": {
+            "message": "={\"text\": \"Confirm your booking:\\n\\nFlight: \" + $json.selectedFlight.flightNumber + \"\\nPassengers: \" + $json.passengers + \"\\nExtras: \" + $json.extras.length + \" items\\nTotal: $\" + $json.total, \"type\": \"confirm\"}",
+            "interactionType": "confirm",
+            "confirmMessage": "={{$json.text}}"
+          }
+        }
+      }
+    },
+    {
+      "id": "1760018584134_217",
+      "name": "Process Confirmation",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        2850.0,
+        500.0
+      ],
+      "parameters": {
+        "functionCode": "const confirmed = $input.item.json.confirmed || false;\n\nif (!confirmed) {\n  return [{\n    json: {\n      message: 'Booking cancelled. Feel free to start a new search anytime!',\n      cancelled: true\n    }\n  }];\n}\n\n// Generate booking confirmation\nconst bookingId = `BK${Date.now()}`;\nconst confirmationCode = Math.random().toString(36).substring(2, 8).toUpperCase();\n\nreturn [{\n  json: {\n    ...$input.item.json,\n    confirmed: true,\n    bookingId: bookingId,\n    confirmationCode: confirmationCode,\n    status: 'confirmed'\n  }\n}];\n"
+      }
+    },
+    {
+      "id": "1760018584134_218",
+      "name": "Save Booking",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [
+        3100.0,
+        500.0
+      ],
+      "parameters": {
+        "operation": "insert",
+        "table": "flight_bookings"
+      },
+      "credentials": {
+        "postgres": {
+          "id": "credential_id",
+          "name": "PostgreSQL"
+        }
+      }
+    },
+    {
+      "id": "1760018584134_219",
+      "name": "Build Confirmation Message",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        3350.0,
+        500.0
+      ],
+      "parameters": {
+        "functionCode": "const data = $input.item.json;\n\nconst message = `✅ Booking Confirmed!\n\nConfirmation Code: ${data.confirmationCode}\nBooking ID: ${data.bookingId}\n\nFlight: ${data.selectedFlight.flightNumber}\nDate: ${data.travelDate}\nPassengers: ${data.passengers}\nTotal: $${data.total}\n\nWe've sent a confirmation email with your ticket details.`;\n\nreturn [{\n  json: {\n    message: message,\n    bookingId: data.bookingId,\n    confirmationCode: data.confirmationCode\n  }\n}];\n"
+      }
+    },
+    {
+      "id": "1760018584134_220",
+      "name": "Send Confirmation",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        3600.0,
+        500.0
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseCode": 200,
+        "responseBody": {
+          "message": "={{$json.message}}",
+          "bookingId": "={{$json.bookingId}}",
+          "confirmationCode": "={{$json.confirmationCode}}",
+          "type": "text"
+        }
+      }
+    },
+    {
+      "id": "1760018584134_221",
+      "name": "Default Booking Response",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        100.0,
+        600.0
+      ],
+      "parameters": {
+        "functionCode": "return [{\n  json: {\n    message: 'I can help you with bookings! Please tell me more about what you\\'d like to book.',\n    type: 'text'\n  }\n}];\n"
+      }
+    },
+    {
+      "id": "1760018584134_222",
+      "name": "Send Booking Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        350.0,
+        600.0
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseCode": 200,
+        "responseBody": {
+          "message": "={{$json.message}}",
+          "type": "text"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Chat Webhook": {
+      "main": [
+        [
+          {
+            "node": "Parse Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Message": {
+      "main": [
+        [
+          {
+            "node": "Save Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Message": {
+      "main": [
+        [
+          {
+            "node": "Detect Intent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Detect Intent": {
+      "main": [
+        [
+          {
+            "node": "Needs Interaction?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Needs Interaction?": {
+      "main": [
+        [
+          {
+            "node": "Flight Search?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Generate Simple Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Simple Response": {
+      "main": [
+        [
+          {
+            "node": "Send Simple Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Flight Search?": {
+      "main": [
+        [
+          {
+            "node": "Ask Destination",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Default Booking Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ask Destination": {
+      "main": [
+        [
+          {
+            "node": "Process Destination",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Destination": {
+      "main": [
+        [
+          {
+            "node": "Ask Travel Date",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ask Travel Date": {
+      "main": [
+        [
+          {
+            "node": "Calculate Date",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate Date": {
+      "main": [
+        [
+          {
+            "node": "Ask Passengers",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ask Passengers": {
+      "main": [
+        [
+          {
+            "node": "Search Flights",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search Flights": {
+      "main": [
+        [
+          {
+            "node": "Show Flight Options",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Show Flight Options": {
+      "main": [
+        [
+          {
+            "node": "Process Flight Selection",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Flight Selection": {
+      "main": [
+        [
+          {
+            "node": "Ask Extras",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ask Extras": {
+      "main": [
+        [
+          {
+            "node": "Calculate Total",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate Total": {
+      "main": [
+        [
+          {
+            "node": "Confirm Booking",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Confirm Booking": {
+      "main": [
+        [
+          {
+            "node": "Process Confirmation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Confirmation": {
+      "main": [
+        [
+          {
+            "node": "Save Booking",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Booking": {
+      "main": [
+        [
+          {
+            "node": "Build Confirmation Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Confirmation Message": {
+      "main": [
+        [
+          {
+            "node": "Send Confirmation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Default Booking Response": {
+      "main": [
+        [
+          {
+            "node": "Send Booking Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionMode": "sequential",
+    "timezone": "UTC"
+  },
+  "tags": [
+    "chat",
+    "interactive",
+    "flutter",
+    "ui",
+    "assistant"
+  ]
+}
