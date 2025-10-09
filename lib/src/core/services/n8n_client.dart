@@ -59,19 +59,14 @@ class N8nClient {
   /// Throws [N8nException] on failure
   ///
   /// [workflowId] - Optional workflow ID to lookup execution via REST API
-  /// [expectWaitNode] - If true, don't wait for webhook response (for wait node workflows)
   ///
   /// Note: If workflowId is provided and API key is configured,
   /// this method will use the REST API to get the real execution ID after
   /// triggering the webhook. Otherwise returns a pseudo execution ID.
-  ///
-  /// IMPORTANT: Set expectWaitNode=true for workflows with wait nodes, otherwise
-  /// the webhook call will hang indefinitely waiting for a response that never comes.
   Future<String> startWorkflow(
     String webhookPath,
     Map<String, dynamic>? initialData, {
     String? workflowId,
-    bool expectWaitNode = false,
   }) async {
     if (webhookPath.isEmpty) {
       throw N8nException.workflow('Webhook path cannot be empty');
@@ -86,89 +81,40 @@ class N8nClient {
       };
       final body = json.encode(initialData ?? {});
 
-      if (expectWaitNode) {
-        // For wait node workflows: Fire-and-forget webhook, then poll for execution ID
-        // Don't wait for response as wait node webhooks hang indefinitely
-        if (workflowId == null || config.security.apiKey == null) {
-          throw N8nException.workflow(
-            'expectWaitNode=true requires workflowId and API key for execution lookup',
-          );
-        }
-
-        // Fire webhook without waiting for response (use very short timeout)
-        _httpClient
+      final response = await _errorHandler.executeWithRetry(() async {
+        return _httpClient
             .post(webhookUrl, headers: headers, body: body)
-            .timeout(const Duration(milliseconds: 100))
-            .ignore(); // Ignore any timeout/error
+            .timeout(config.webhook.timeout);
+      });
 
-        // Wait for execution to appear in n8n
-        await Future.delayed(const Duration(milliseconds: 2000));
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        // Step 2: If workflowId provided, get real execution ID via REST API
+        if (workflowId != null && config.security.apiKey != null) {
+          // Small delay to let execution start
+          await Future.delayed(const Duration(milliseconds: 500));
 
-        // Poll for execution (try multiple times as it may take a moment)
-        for (var attempt = 0; attempt < 8; attempt++) {
           try {
             final executions = await listExecutions(
               workflowId: workflowId,
-              limit: 10,
+              limit: 1,
             );
 
-            // Find execution that matches our webhook trigger time (within last 30 seconds)
-            final now = DateTime.now();
-            for (final execution in executions) {
-              final age = now.difference(execution.startedAt).inSeconds;
-              if (age < 30) {
-                return execution.id; // Found recent execution!
-              }
+            if (executions.isNotEmpty) {
+              return executions.first.id; // Real execution ID from n8n REST API!
             }
           } catch (_) {
-            // Retry on failure
-          }
-
-          if (attempt < 7) {
-            await Future.delayed(const Duration(milliseconds: 1500));
+            // If API lookup fails, fall through to pseudo ID
           }
         }
 
-        throw N8nException.workflow(
-          'Failed to find execution after triggering wait node workflow',
-        );
+        // Step 3: Fallback to pseudo execution ID
+        final timestamp = DateTime.now().millisecondsSinceEpoch;
+        return 'webhook-$webhookPath-$timestamp';
       } else {
-        // Normal workflow: Wait for webhook response
-        final response = await _errorHandler.executeWithRetry(() async {
-          return _httpClient
-              .post(webhookUrl, headers: headers, body: body)
-              .timeout(config.webhook.timeout);
-        });
-
-        if (response.statusCode >= 200 && response.statusCode < 300) {
-          // Step 2: If workflowId provided, get real execution ID via REST API
-          if (workflowId != null && config.security.apiKey != null) {
-            // Small delay to let execution start
-            await Future.delayed(const Duration(milliseconds: 500));
-
-            try {
-              final executions = await listExecutions(
-                workflowId: workflowId,
-                limit: 1,
-              );
-
-              if (executions.isNotEmpty) {
-                return executions.first.id; // Real execution ID from n8n REST API!
-              }
-            } catch (_) {
-              // If API lookup fails, fall through to pseudo ID
-            }
-          }
-
-          // Step 3: Fallback to pseudo execution ID
-          final timestamp = DateTime.now().millisecondsSinceEpoch;
-          return 'webhook-$webhookPath-$timestamp';
-        } else {
-          throw N8nException.serverError(
-            'Failed to trigger webhook: ${response.body}',
-            statusCode: response.statusCode,
-          );
-        }
+        throw N8nException.serverError(
+          'Failed to trigger webhook: ${response.body}',
+          statusCode: response.statusCode,
+        );
       }
     } catch (e) {
       rethrow;

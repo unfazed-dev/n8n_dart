@@ -261,17 +261,28 @@ void main() {
       }
     }, timeout: const Timeout(Duration(minutes: 2)));
 
-    // SKIPPED: Wait node E2E tests - n8n cloud API limitation
-    // n8n API bug: GET /executions does not return "waiting" status executions
-    // See: https://github.com/n8n-io/n8n/issues/14748
+    // NOTE: Wait node E2E tests cannot be implemented due to n8n cloud API limitation
     //
-    // Without execution ID from API, cannot test:
-    // - Complete workflow lifecycle with wait node (Start → Poll → Wait → Resume → Complete)
-    // - Queue + Wait nodes integration
-    // - Cache + Wait nodes + Resume workflow
+    // Issue: n8n cloud API bug - GET /executions filters out "waiting" status executions
+    // Reference: https://github.com/n8n-io/n8n/issues/14748
     //
-    // These tests require the ability to discover execution IDs via API after triggering
-    // wait node workflows, but the n8n cloud API filters out "waiting" status executions
-    // from the /executions endpoint. This is a known limitation of the platform.
+    // Impact: Cannot test complete wait node lifecycle (Start → Wait → Resume → Complete)
+    // because we cannot discover execution IDs for workflows in "waiting" status.
+    //
+    // When a wait node workflow is triggered via webhook:
+    // 1. Webhook call hangs indefinitely (wait node doesn't respond)
+    // 2. Execution enters "waiting" status
+    // 3. GET /api/v1/executions returns empty (filters waiting executions)
+    // 4. No way to get execution ID to resume workflow
+    //
+    // Alternative tested: POST /api/v1/workflows/{id}/run - not available on cloud
+    // Alternative tested: Query by status=waiting - still returns empty
+    //
+    // Workaround: Wait node lifecycle is fully tested in wait_node_test.dart using
+    // the N8nDiscoveryService which can find executions by manually providing IDs.
+    //
+    // This limitation only affects automated E2E testing of wait nodes on n8n cloud.
+    // The SDK functionality itself (resumeWorkflow, getExecutionStatus, etc.) works
+    // correctly when execution IDs are provided through other means (UI, webhooks, etc.).
   });
 }

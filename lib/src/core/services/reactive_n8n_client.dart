@@ -106,14 +106,12 @@ class ReactiveN8nClient {
   /// - Updates executionState$
   ///
   /// If workflowId is provided, uses REST API to get real execution ID
-  /// Set expectWaitNode=true for workflows with wait nodes
   Stream<WorkflowExecution> startWorkflow(
     String webhookId,
     Map<String, dynamic>? data, {
     String? workflowId,
-    bool expectWaitNode = false,
   }) {
-    return Stream.fromFuture(_performStartWorkflow(webhookId, data, workflowId: workflowId, expectWaitNode: expectWaitNode))
+    return Stream.fromFuture(_performStartWorkflow(webhookId, data, workflowId: workflowId))
         .doOnData((execution) {
           // Update state
           _updateExecutionState(execution);
@@ -497,7 +495,6 @@ class ReactiveN8nClient {
     String webhookPath,
     Map<String, dynamic>? data, {
     String? workflowId,
-    bool expectWaitNode = false,
   }) async {
     final startTime = DateTime.now();
 
@@ -510,88 +507,6 @@ class ReactiveN8nClient {
       };
       final body = json.encode(data ?? {});
 
-      if (expectWaitNode) {
-        // For wait node workflows: Fire-and-forget webhook, then poll for execution ID
-        if (workflowId == null || config.security.apiKey == null) {
-          throw N8nException.workflow(
-            'expectWaitNode=true requires workflowId and API key for execution lookup',
-          );
-        }
-
-        // Fire webhook without waiting for response (use very short timeout)
-        _httpClient
-            .post(webhookUrl, headers: headers, body: body)
-            .timeout(const Duration(milliseconds: 100))
-            .ignore(); // Ignore any timeout/error
-
-        // Wait for execution to appear in n8n
-        await Future.delayed(const Duration(milliseconds: 2000));
-
-        // Poll for execution (try multiple times as it may take a moment)
-        for (var attempt = 0; attempt < 8; attempt++) {
-          try {
-            final url = Uri.parse('${config.baseUrl}/api/v1/executions')
-                .replace(queryParameters: {
-              'workflowId': workflowId,
-              'limit': '10',
-            });
-            final apiHeaders = {
-              'Content-Type': 'application/json',
-              'Accept': 'application/json',
-              'X-N8N-API-KEY': config.security.apiKey!,
-            };
-
-            final execResponse = await _httpClient
-                .get(url, headers: apiHeaders)
-                .timeout(config.webhook.timeout);
-
-            if (execResponse.statusCode == 200) {
-              final execData = json.decode(execResponse.body) as Map<String, dynamic>;
-              final executions = execData['data'] as List<dynamic>?;
-
-              if (executions != null && executions.isNotEmpty) {
-                // Find execution that matches our webhook trigger time (within last 30 seconds)
-                final now = DateTime.now();
-                for (final execJson in executions) {
-                  final exec = execJson as Map<String, dynamic>;
-                  final startedAtStr = exec['startedAt'] as String?;
-                  if (startedAtStr != null) {
-                    final startedAt = DateTime.parse(startedAtStr);
-                    final age = now.difference(startedAt).inSeconds;
-                    if (age < 30) {
-                      // Found recent execution!
-                      final executionId = exec['id'] as String;
-                      _updateMetrics(
-                          success: true, responseTime: DateTime.now().difference(startTime));
-
-                      // Return a WorkflowExecution object
-                      return WorkflowExecution(
-                        id: executionId,
-                        workflowId: workflowId,
-                        status: WorkflowStatus.waiting,
-                        startedAt: startedAt,
-                        waitingForInput: true,
-                      );
-                    }
-                  }
-                }
-              }
-            }
-          } catch (_) {
-            // Retry on failure
-          }
-
-          if (attempt < 7) {
-            await Future.delayed(const Duration(milliseconds: 1500));
-          }
-        }
-
-        throw N8nException.workflow(
-          'Failed to find execution after triggering wait node workflow',
-        );
-      }
-
-      // Normal workflow: Wait for webhook response
       final response = await _httpClient
           .post(webhookUrl, headers: headers, body: body)
           .timeout(config.webhook.timeout);
