@@ -187,6 +187,62 @@ enum WorkflowStatus {
   }
 }
 
+/// Wait node mode enumeration
+///
+/// Defines the different modes a Wait node can operate in
+enum WaitMode {
+  /// Wait for a specific time interval to elapse
+  timeInterval,
+
+  /// Wait until a specific date/time is reached
+  specifiedTime,
+
+  /// Wait for an external webhook call to resume
+  webhook,
+
+  /// Wait for a user to submit a form
+  form,
+
+  /// Unknown or unsupported wait mode
+  unknown;
+
+  /// Parse wait mode from string
+  static WaitMode fromString(String mode) {
+    switch (mode.toLowerCase()) {
+      case 'timeinterval':
+      case 'time_interval':
+      case 'time-interval':
+        return WaitMode.timeInterval;
+      case 'specifiedtime':
+      case 'specified_time':
+      case 'specified-time':
+        return WaitMode.specifiedTime;
+      case 'webhook':
+        return WaitMode.webhook;
+      case 'form':
+        return WaitMode.form;
+      default:
+        return WaitMode.unknown;
+    }
+  }
+
+  @override
+  String toString() {
+    switch (this) {
+      case WaitMode.timeInterval:
+        return 'timeInterval';
+      case WaitMode.specifiedTime:
+        return 'specifiedTime';
+      case WaitMode.webhook:
+        return 'webhook';
+      case WaitMode.form:
+        return 'form';
+      case WaitMode.unknown:
+        return 'unknown';
+    }
+  }
+}
+
 /// Form field type enumeration supporting 18 field types
 enum FormFieldType {
   text,
@@ -489,12 +545,34 @@ class WaitNodeData with Validator {
   final DateTime createdAt;
   final DateTime? expiresAt;
 
+  /// The mode this wait node is operating in
+  final WaitMode mode;
+
+  /// Resume URL for webhook mode (unique URL to call to resume workflow)
+  final String? resumeUrl;
+
+  /// Form URL for form mode (unique URL where users fill out the form)
+  final String? formUrl;
+
+  /// Wait duration for time interval mode
+  final Duration? waitDuration;
+
+  /// Target datetime for specified time mode
+  final DateTime? waitUntil;
+
   const WaitNodeData({
     required this.nodeId,
     required this.nodeName,
-    required this.fields, required this.createdAt, this.description,
+    required this.fields,
+    required this.createdAt,
+    this.description,
     this.metadata,
     this.expiresAt,
+    this.mode = WaitMode.unknown,
+    this.resumeUrl,
+    this.formUrl,
+    this.waitDuration,
+    this.waitUntil,
   });
 
   /// Create WaitNodeData from JSON with validation
@@ -560,6 +638,38 @@ class WaitNodeData with Validator {
         return ValidationResult.failure(errors);
       }
 
+      // Parse wait mode
+      final WaitMode mode;
+      if (json['mode'] != null) {
+        mode = WaitMode.fromString(json['mode'] as String);
+      } else if (json['resume'] != null) {
+        // Fallback: infer mode from 'resume' field
+        mode = WaitMode.fromString(json['resume'] as String);
+      } else {
+        mode = WaitMode.unknown;
+      }
+
+      // Parse waitUntil for specified time mode
+      DateTime? waitUntil;
+      if (json['waitUntil'] != null) {
+        try {
+          waitUntil = DateTime.parse(json['waitUntil'] as String);
+        } catch (e) {
+          // Ignore parsing errors for optional field
+        }
+      }
+
+      // Parse waitDuration for time interval mode
+      Duration? waitDuration;
+      if (json['waitDuration'] != null) {
+        try {
+          final seconds = json['waitDuration'] as int;
+          waitDuration = Duration(seconds: seconds);
+        } catch (e) {
+          // Ignore parsing errors for optional field
+        }
+      }
+
       final waitNodeData = WaitNodeData(
         nodeId: json['nodeId'] as String,
         nodeName: json['nodeName'] as String,
@@ -568,6 +678,11 @@ class WaitNodeData with Validator {
         metadata: json['metadata'] as Map<String, dynamic>?,
         createdAt: createdAt!,
         expiresAt: expiresAt,
+        mode: mode,
+        resumeUrl: json['resumeUrl'] as String? ?? json['webhookUrl'] as String?,
+        formUrl: json['formUrl'] as String?,
+        waitDuration: waitDuration,
+        waitUntil: waitUntil,
       );
 
       return ValidationResult.success(waitNodeData);
@@ -586,6 +701,11 @@ class WaitNodeData with Validator {
       if (metadata != null) 'metadata': metadata,
       'createdAt': createdAt.toIso8601String(),
       if (expiresAt != null) 'expiresAt': expiresAt!.toIso8601String(),
+      'mode': mode.toString(),
+      if (resumeUrl != null) 'resumeUrl': resumeUrl,
+      if (formUrl != null) 'formUrl': formUrl,
+      if (waitDuration != null) 'waitDuration': waitDuration!.inSeconds,
+      if (waitUntil != null) 'waitUntil': waitUntil!.toIso8601String(),
     };
   }
 
@@ -629,7 +749,7 @@ class WaitNodeData with Validator {
 
   @override
   String toString() {
-    return 'WaitNodeData(nodeId: $nodeId, nodeName: $nodeName, fields: ${fields.length})';
+    return 'WaitNodeData(nodeId: $nodeId, nodeName: $nodeName, mode: $mode, fields: ${fields.length})';
   }
 
   @override

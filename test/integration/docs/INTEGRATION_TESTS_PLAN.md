@@ -140,23 +140,53 @@ expect(client.errorHandler.circuitBreakerState, CircuitState.open);
 ---
 
 ### **Category 4: Wait Nodes & Resume (Critical)**
-Tests interactive workflows requiring user input.
+Tests wait node workflows across all 4 modes: time interval, specified time, webhook, and form submission.
 
-**Workflow:**
+**Wait Node Modes:**
+
+**Mode 1: Time Interval** (Automated)
 ```dart
-// Start workflow with wait node
-final execution = await client.startWorkflow(waitNodeWebhookId, {}).first;
-final waiting = await client.pollExecutionStatus(execution.id)
-    .firstWhere((e) => e.waitingForInput);
-await client.resumeWorkflow(execution.id, userInput);
-final completed = await client.pollExecutionStatus(execution.id)
-    .firstWhere((e) => e.isFinished);
+// Start workflow that waits 5 seconds
+final execution = await client.startWorkflow('test/wait-time', {});
+// Workflow auto-completes after 5 seconds - no manual intervention needed
+final completed = await waitForCompletedState(client, execution.id);
+expect(completed.status, WorkflowStatus.success);
+```
+
+**Mode 2: Specified Time** (Automated)
+```dart
+// Start workflow that waits until specific datetime
+final targetTime = DateTime.now().add(Duration(seconds: 10));
+final execution = await client.startWorkflow('test/wait-until', {});
+// Workflow auto-completes at specified time
+```
+
+**Mode 3: Webhook Resume** (External Trigger)
+```dart
+// Start workflow that waits for webhook call
+final execution = await client.startWorkflow('test/wait-webhook', {});
+final waiting = await waitForWaitingState(client, execution.id);
+// External system calls resumeUrl to continue workflow
+// SDK provides: waiting.waitNodeData?.resumeUrl
+```
+
+**Mode 4: Form Submission** (User Input)
+```dart
+// Start workflow with form submission wait
+final execution = await client.startWorkflow('test/wait-node', {});
+final waiting = await waitForWaitingState(client, execution.id);
+// User fills form at: waiting.waitNodeData?.formUrl
+await client.resumeWorkflow(execution.id, formData);
+final completed = await waitForCompletedState(client, execution.id);
 ```
 
 **Use Cases:**
-- Wait node detection
+- Time-based delays (rate limiting, scheduled actions)
+- External system integrations (payment confirmations, API callbacks)
+- Human-in-the-loop workflows (approvals, data collection)
+- Wait node mode detection (`WaitMode` enum)
 - Form field validation
-- Workflow resumption
+- Workflow resumption patterns
 - Multi-step workflow completion
 
 ---
@@ -324,8 +354,8 @@ Phase 1 implementation completed successfully on 2025-10-07. All essential test 
 **Test Results:**
 - Connection tests: 9 tests implemented ✅
 - Execution tests: 16 tests implemented ✅
-- Wait node tests: 14 tests implemented ✅
-- Total Phase 1: 39 integration tests ✅
+- Wait node tests: 18 tests implemented ✅ (14 form mode + 2 time interval + 2 webhook mode)
+- Total Phase 1: 43 integration tests ✅
 - dart analyze: 0 errors, 0 warnings ✅
 - Total lines of code: ~2,093 lines across 6 Dart files
 

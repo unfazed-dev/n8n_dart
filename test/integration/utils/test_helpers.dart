@@ -186,6 +186,33 @@ Future<WorkflowExecution> waitForWaitingState(
   );
 }
 
+/// Wait for an execution to reach completed state (success, error, or canceled)
+///
+/// Polls execution status until it reaches a terminal state or timeout occurs
+Future<WorkflowExecution> waitForCompletedState(
+  N8nClient client,
+  String executionId, {
+  Duration timeout = const Duration(seconds: 60),
+  Duration pollInterval = const Duration(seconds: 2),
+}) async {
+  final stopwatch = Stopwatch()..start();
+
+  while (stopwatch.elapsed < timeout) {
+    final execution = await client.getExecutionStatus(executionId);
+
+    if (execution.isFinished) {
+      return execution;
+    }
+
+    await Future.delayed(pollInterval);
+  }
+
+  throw TimeoutException(
+    'Timed out waiting for execution $executionId to complete',
+    timeout,
+  );
+}
+
 /// Test data generator for workflow inputs
 class TestDataGenerator {
   /// Generate simple test data

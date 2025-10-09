@@ -542,4 +542,121 @@ void main() {
       );
     });
   });
+
+  group('Wait Node - Time Interval Mode', () {
+    test('should complete workflow after time interval automatically',
+        () async {
+      // Arrange
+      final payload = TestDataGenerator.simple(name: 'time-interval-test');
+
+      // Act - Trigger time interval wait workflow (waits 5 seconds)
+      final executionId = await client.startWorkflow(
+        'test/wait-time',
+        payload,
+      );
+      TestCleanup.registerExecution(executionId);
+
+      // Poll for completion (should complete after ~5 seconds automatically)
+      final completedExecution = await waitForCompletedState(
+        client,
+        executionId,
+        timeout: const Duration(seconds: 30),
+      );
+
+      // Assert
+      expect(completedExecution.status, WorkflowStatus.success,
+          reason: 'Time interval workflow should complete successfully');
+      expect(completedExecution.finished, isTrue,
+          reason: 'Execution should be marked as finished');
+    }, timeout: const Timeout(Duration(seconds: 60)));
+
+    test('should auto-resume without manual intervention', () async {
+      // Arrange
+      final payload = TestDataGenerator.simple(name: 'auto-resume-test');
+      final startTime = DateTime.now();
+
+      // Act
+      final executionId = await client.startWorkflow(
+        'test/wait-time',
+        payload,
+      );
+      TestCleanup.registerExecution(executionId);
+
+      // Wait for automatic completion
+      final completedExecution = await waitForCompletedState(
+        client,
+        executionId,
+        timeout: const Duration(seconds: 30),
+      );
+
+      final endTime = DateTime.now();
+      final actualDuration = endTime.difference(startTime);
+
+      // Assert
+      expect(completedExecution.status, WorkflowStatus.success);
+      expect(actualDuration.inSeconds, greaterThanOrEqualTo(5),
+          reason: 'Should wait at least 5 seconds');
+      expect(actualDuration.inSeconds, lessThan(15),
+          reason: 'Should complete within reasonable time');
+    }, timeout: const Timeout(Duration(seconds: 60)));
+  });
+
+  group('Wait Node - Webhook Resume Mode', () {
+    test('should enter waiting status for webhook resume', () async {
+      // Arrange
+      final payload = TestDataGenerator.simple(name: 'webhook-wait-test');
+
+      // Act
+      final executionId = await client.startWorkflow(
+        'test/wait-webhook',
+        payload,
+      );
+      TestCleanup.registerExecution(executionId);
+
+      // Wait for workflow to enter waiting state
+      final waitingExecution = await waitForWaitingState(
+        client,
+        executionId,
+        timeout: const Duration(seconds: 30),
+      );
+
+      // Assert
+      expect(waitingExecution.status, WorkflowStatus.waiting,
+          reason: 'Execution should be in waiting status');
+      expect(waitingExecution.waitNodeData, isNotNull,
+          reason: 'Wait node data should be present');
+      expect(waitingExecution.waitNodeData?.mode, WaitMode.webhook,
+          reason: 'Wait mode should be webhook');
+
+      // Note: resumeUrl would be here if n8n API provides it
+      // expect(waitingExecution.waitNodeData?.resumeUrl, isNotNull);
+    }, timeout: const Timeout(Duration(seconds: 60)));
+
+    test('should provide wait mode information', () async {
+      // Arrange
+      final payload = TestDataGenerator.simple(name: 'webhook-mode-test');
+
+      // Act
+      final executionId = await client.startWorkflow(
+        'test/wait-webhook',
+        payload,
+      );
+      TestCleanup.registerExecution(executionId);
+
+      final waitingExecution = await waitForWaitingState(
+        client,
+        executionId,
+        timeout: const Duration(seconds: 30),
+      );
+
+      // Assert - Verify WaitMode enum works
+      final waitData = waitingExecution.waitNodeData!;
+      expect(waitData.mode, WaitMode.webhook,
+          reason: 'Mode should be parsed correctly');
+      expect(waitData.mode.toString(), 'webhook',
+          reason: 'toString should work for wait mode');
+      expect(waitData.toString(), contains('webhook'),
+          reason: 'WaitNodeData toString should include mode');
+    }, timeout: const Timeout(Duration(seconds: 60)));
+  });
 }
