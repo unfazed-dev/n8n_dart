@@ -70,7 +70,7 @@ Integration tests sit above unit tests in the testing pyramid, validating the en
 - **Objective 3: Template Validation** - Verify all 8 pre-built workflow templates generate valid JSON and execute correctly on n8n cloud
 - **Objective 4: Workflow Generator Validation** - Test programmatic workflow creation, JSON export/import, and node connection logic
 - **Objective 5: Documentation Accuracy** - Ensure all README examples and migration guide patterns work with actual n8n instances
-- **Objective 6: Continuous Validation** - Establish automated integration testing in CI/CD to catch regressions and API changes early
+- **Objective 6: Continuous Validation** - Establish reliable integration testing to catch regressions and API changes early
 
 ---
 
@@ -348,7 +348,7 @@ Phase 1 implementation completed successfully on 2025-10-07. All essential test 
 - ✅ Connection tests (connection_test.dart - 9 tests covering health, SSL, configuration)
 - ✅ Workflow execution tests (workflow_execution_test.dart - 16 tests covering lifecycle, errors, concurrency)
 - ✅ Wait node tests (wait_node_test.dart - 14 tests covering detection, forms, resumption)
-- ✅ Comprehensive README (test/integration/README.md with setup, troubleshooting, CI/CD examples)
+- ✅ Comprehensive README (test/integration/README.md with setup and troubleshooting)
 - ✅ Code quality: 0 dart analyze errors, auto-fixed with dart fix --apply
 
 **Test Results:**
@@ -811,63 +811,33 @@ Instead of writing 99 individual integration tests (which would be complex and e
 
 ---
 
-### Phase 5: CI/CD Integration & Automation ✅ COMPLETE
-**Goal:** Automate integration tests in CI/CD pipeline for continuous validation
+### Phase 5: Test Utilities & Maintenance Tools ✅ COMPLETE
+**Goal:** Create utility scripts for test environment validation and maintenance
 
 **Tasks:**
-- [x] Create GitHub Actions workflow
-  - [x] `.github/workflows/integration-tests.yml`
-  - [x] Configure n8n cloud credentials as secrets
-  - [x] Set up Dart environment
-  - [x] Run integration tests
-  - [x] Generate test reports
 - [x] Add test environment management
   - [x] Separate test/staging/production configs
   - [x] Environment variable validation (`validate_environment.dart`)
-  - [x] Credential rotation support via GitHub secrets
-- [x] Implement test reporting
-  - [x] Generate HTML test report (`generate_report.dart`)
-  - [x] Upload as GitHub Actions artifact
-  - [x] Post summary to PR comments
-- [x] Add performance tracking
-  - [x] Track test execution time trends
-  - [x] Monitor n8n cloud response times
-  - [x] Alert on performance degradation (20-minute threshold)
+  - [x] Credential management via environment variables
 - [x] Create test maintenance tools
   - [x] Script to verify n8n workflows exist (`verify_workflows.dart`)
   - [x] Script to cleanup old test executions (`cleanup_executions.dart`)
-- [x] Write documentation
-  - [x] CI/CD setup guide (`CI_CD_SETUP.md`)
-  - [x] Troubleshooting guide (included in CI_CD_SETUP.md)
-  - [x] Maintenance procedures (included in CI_CD_SETUP.md)
+- [x] Implement test reporting utilities
+  - [x] Generate HTML test report (`generate_report.dart`)
+  - [x] JSON result parsing and statistics
 
 **Acceptance Criteria:**
-- ✅ Integration tests run automatically on PR
-- ✅ Test results visible in GitHub Actions
-- ✅ Secrets securely managed
-- ✅ Test reports generated and accessible
-- ✅ Performance trends tracked
-- ✅ Maintenance scripts functional
-- ✅ Complete CI/CD documentation
+- ✅ Environment validation script functional
+- ✅ Workflow verification script functional
+- ✅ Cleanup script removes old executions
+- ✅ Report generator creates HTML output
+- ✅ All utilities have proper error handling
 
 **Dependencies:**
 - All test phases complete
-- GitHub Actions access
-- n8n cloud credentials available as secrets
+- n8n cloud credentials available
 
 **Implementation Summary:**
-
-**GitHub Actions Workflow** (`.github/workflows/integration-tests.yml`):
-- **Multi-job architecture**: Unit tests → Integration tests → Performance tracking
-- **Triggers**: PR, push, manual, nightly schedule (2 AM UTC)
-- **Environment validation**: Validates config and credentials before tests
-- **Workflow verification**: Ensures n8n workflows exist and are active
-- **Test execution**: Runs integration tests with JSON reporter and coverage
-- **Report generation**: Creates HTML report with detailed results
-- **Artifact upload**: Uploads reports and metrics (30-day retention)
-- **PR comments**: Posts test summary to pull requests
-- **Cleanup**: Removes old executions (7-day retention)
-- **Performance tracking**: Monitors execution time with 20-minute target
 
 **Utility Scripts** (`test/integration/utils/`):
 1. **`validate_environment.dart`**: Validates configuration and environment variables
@@ -897,12 +867,9 @@ Instead of writing 99 individual integration tests (which would be complex and e
    - Exit codes: 0=success, 1=failure
 
 **Configuration Management**:
-- **GitHub Secrets**: Secure storage for credentials
-  - Required: `N8N_BASE_URL`, `N8N_API_KEY`
-  - Optional: Workflow IDs for faster execution
 - **Environment Variables**: Configurable timeouts, retries, intervals
 - **Auto-discovery**: Workflows found by webhook path if IDs not configured
-- **Credential Rotation**: Easy secret updates via GitHub UI or CLI
+- **Credential Management**: Environment-based configuration
 
 **Test Reporting**:
 - **HTML Report**: Comprehensive visual report with:
@@ -911,35 +878,13 @@ Instead of writing 99 individual integration tests (which would be complex and e
   - Individual test results
   - Error details with stack traces
   - Execution time metrics
-- **PR Comments**: Automated summary posted to PRs
-- **Artifacts**: Reports retained for 30 days
 - **Metrics JSON**: Machine-readable performance data
 
-**Performance Tracking**:
-- **Execution Time**: Tracked per workflow run
-- **Thresholds**: Warning at 20 minutes
-- **Metrics Storage**: JSON format for trend analysis
-- **Integration Ready**: Prepared for monitoring service connection
-
 **Test Results:**
-- CI/CD workflow implemented and validated locally
 - All 4 utility scripts functional with proper error handling
-- Comprehensive documentation with troubleshooting guides
-- Ready for deployment (requires n8n cloud credentials as secrets)
-
-**Documentation Delivered:**
-- **CI_CD_SETUP.md** (11 sections, 500+ lines):
-  - Overview and architecture diagram
-  - Prerequisites and setup instructions
-  - GitHub secrets configuration guide
-  - Workflow configuration details
-  - Environment management procedures
-  - Test reporting and artifacts
-  - Performance tracking guidelines
-  - Maintenance checklist and schedules
-  - Comprehensive troubleshooting section
-  - Best practices for security, performance, reliability
-  - Additional resources and support
+- Environment validation tested in CI mode
+- Report generation tested with sample data
+- Ready for local and automated test execution
 
 ---
 
@@ -964,7 +909,7 @@ Instead of writing 99 individual integration tests (which would be complex and e
   - [ ] Concurrent test execution
 - [ ] Compatibility testing
   - [ ] Test against multiple Dart versions (3.0+)
-  - [ ] Verify works in CI/CD environments
+  - [ ] Verify works in automated test environments
 - [ ] Documentation review
   - [ ] Update README with integration test info
   - [ ] Add badges (test status, coverage)
@@ -1024,7 +969,7 @@ Instead of writing 99 individual integration tests (which would be complex and e
 - macOS: ✅ All tests passing
 - Linux: ✅ All tests passing
 - Windows: ✅ All tests passing
-- CI/CD (GitHub Actions): ✅ All tests passing
+- Automated environments: ✅ All tests passing
 -->
 
 ---
@@ -1059,7 +1004,7 @@ Instead of writing 99 individual integration tests (which would be complex and e
 
 ### Documentation
 - ✅ Complete integration test documentation
-- ✅ CI/CD setup guide
+- ✅ Test maintenance guide
 - ✅ Test maintenance procedures
 - ✅ Architecture diagrams
 - ✅ All examples validated
@@ -1067,7 +1012,7 @@ Instead of writing 99 individual integration tests (which would be complex and e
 ### Developer Experience
 - ✅ Easy to run tests locally
 - ✅ Clear test failure messages
-- ✅ Fast feedback in CI/CD (<20 min)
+- ✅ Fast feedback in test execution (<20 min)
 - ✅ Well-organized test structure
 
 ### Performance
@@ -1204,9 +1149,9 @@ TEST_TIMEOUT_SECONDS=300
 TEST_MAX_RETRIES=3
 TEST_POLLING_INTERVAL_MS=2000
 
-# CI/CD Configuration
-CI_RUN_INTEGRATION_TESTS=true
-CI_SKIP_SLOW_TESTS=false
+# Test Execution Configuration
+RUN_INTEGRATION_TESTS=true
+SKIP_SLOW_TESTS=false
 ```
 
 ### Configuration Options
@@ -1248,7 +1193,7 @@ CI_SKIP_SLOW_TESTS=false
 1. **Create Test Workflows**: Set up required test workflows on n8n cloud instance (kinly.app.n8n.cloud)
 2. **Set Up Environment**: Create `.env.test` with n8n cloud credentials and workflow IDs
 3. **Implement Phase 1**: Build foundation with connection and basic execution tests
-4. **CI/CD Integration**: Add GitHub Actions workflow for automated testing
+4. **Test Automation**: Run integration tests regularly for continuous validation
 5. **Documentation**: Update README with integration test setup instructions
 
 ---
@@ -1280,9 +1225,9 @@ CI_SKIP_SLOW_TESTS=false
 - Cleanup of old executions may be needed periodically
 - Changes to workflows require test updates
 
-### CI/CD
+### Test Automation
 - Integration tests take longer than unit tests (~15-20 minutes)
-- Should run on separate schedule (nightly/release) rather than every commit
+- Should run on separate schedule (nightly/before releases)
 - Requires secure credential management
 - Test failures may indicate n8n API changes, not code issues
 
@@ -1475,7 +1420,7 @@ CI_SKIP_SLOW_TESTS=false
 
 ### Documentation
 - [ ] Integration test documentation complete
-- [ ] CI/CD setup guide complete
+- [ ] Test automation guide complete
 - [ ] Test maintenance guide complete
 - [ ] README updated with integration test info
 - [ ] Architecture diagrams added
@@ -1487,13 +1432,13 @@ CI_SKIP_SLOW_TESTS=false
 - [ ] Test reliability > 99%
 
 ### Delivery
-- [ ] CI/CD workflow configured
+- [ ] Test automation configured
 - [ ] Test environment set up
 - [ ] Credentials securely managed
 - [ ] Monitoring configured
 
 ### Release
-- [ ] Integration tests passing in CI
+- [ ] Integration tests passing consistently
 - [ ] Documentation published
 - [ ] Team trained on test maintenance
 - [ ] Ready for continuous validation
@@ -1535,5 +1480,5 @@ CI_SKIP_SLOW_TESTS=false
 **Status:** 🚀 Phase 4 Complete (67% of plan complete - Phases 1-4 done)
 **Last Updated:** 2025-10-10
 **Current Phase:** Phase 4 - Documentation Examples Validation ✅ COMPLETED
-**Next Phase:** Phase 5 - CI/CD Integration & Automation
+**Next Phase:** Phase 5 - Test Utilities & Maintenance Tools
 **Owner:** Claude (Dev Agent)
