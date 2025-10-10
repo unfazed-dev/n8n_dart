@@ -781,6 +781,23 @@ class WorkflowExecution with Validator {
   final int retryCount;
   final Duration? executionTime;
 
+  // Critical fields for n8nui compatibility (Priority 1 & 2)
+  /// The name/ID of the last node that was executed (Priority 1)
+  /// Used to track workflow position and identify which node is waiting
+  final String? lastNodeExecuted;
+
+  /// Timestamp when execution was stopped/paused (Priority 2)
+  /// Different from finishedAt - indicates pause rather than completion
+  final DateTime? stoppedAt;
+
+  /// Timestamp when wait node expires (Priority 2)
+  /// Used for automatic timeout detection and form expiration
+  final DateTime? waitTill;
+
+  /// Resume webhook URL for waiting executions (Priority 2)
+  /// Direct access to resume URL without parsing waitNodeData
+  final String? resumeUrl;
+
   const WorkflowExecution({
     required this.id,
     required this.workflowId,
@@ -794,6 +811,10 @@ class WorkflowExecution with Validator {
     this.metadata,
     this.retryCount = 0,
     this.executionTime,
+    this.lastNodeExecuted,
+    this.stoppedAt,
+    this.waitTill,
+    this.resumeUrl,
   });
 
   /// Create WorkflowExecution from JSON (throws on validation error)
@@ -845,6 +866,25 @@ class WorkflowExecution with Validator {
         }
       }
 
+      // Parse new timestamp fields (Priority 2)
+      DateTime? stoppedAt;
+      if (json['stoppedAt'] != null) {
+        try {
+          stoppedAt = DateTime.parse(json['stoppedAt'] as String);
+        } catch (e) {
+          errors.add('Invalid stoppedAt format');
+        }
+      }
+
+      DateTime? waitTill;
+      if (json['waitTill'] != null) {
+        try {
+          waitTill = DateTime.parse(json['waitTill'] as String);
+        } catch (e) {
+          errors.add('Invalid waitTill format');
+        }
+      }
+
       // Parse wait node data if present
       WaitNodeData? waitNodeData;
       if (json['waitNodeData'] != null) {
@@ -885,6 +925,11 @@ class WorkflowExecution with Validator {
         metadata: json['metadata'] as Map<String, dynamic>?,
         retryCount: json['retryCount'] as int? ?? 0,
         executionTime: executionTime,
+        // New fields for n8nui compatibility (Priority 1 & 2)
+        lastNodeExecuted: json['lastNodeExecuted'] as String?,
+        stoppedAt: stoppedAt,
+        waitTill: waitTill,
+        resumeUrl: json['resumeUrl'] as String?,
       );
 
       return ValidationResult.success(execution);
@@ -908,6 +953,11 @@ class WorkflowExecution with Validator {
       if (metadata != null) 'metadata': metadata,
       'retryCount': retryCount,
       if (executionTime != null) 'executionTime': executionTime!.inMilliseconds,
+      // New fields for n8nui compatibility (Priority 1 & 2)
+      if (lastNodeExecuted != null) 'lastNodeExecuted': lastNodeExecuted,
+      if (stoppedAt != null) 'stoppedAt': stoppedAt!.toIso8601String(),
+      if (waitTill != null) 'waitTill': waitTill!.toIso8601String(),
+      if (resumeUrl != null) 'resumeUrl': resumeUrl,
     };
   }
 
@@ -951,6 +1001,10 @@ class WorkflowExecution with Validator {
     Map<String, dynamic>? metadata,
     int? retryCount,
     Duration? executionTime,
+    String? lastNodeExecuted,
+    DateTime? stoppedAt,
+    DateTime? waitTill,
+    String? resumeUrl,
   }) {
     return WorkflowExecution(
       id: id ?? this.id,
@@ -965,6 +1019,10 @@ class WorkflowExecution with Validator {
       metadata: metadata ?? this.metadata,
       retryCount: retryCount ?? this.retryCount,
       executionTime: executionTime ?? this.executionTime,
+      lastNodeExecuted: lastNodeExecuted ?? this.lastNodeExecuted,
+      stoppedAt: stoppedAt ?? this.stoppedAt,
+      waitTill: waitTill ?? this.waitTill,
+      resumeUrl: resumeUrl ?? this.resumeUrl,
     );
   }
 

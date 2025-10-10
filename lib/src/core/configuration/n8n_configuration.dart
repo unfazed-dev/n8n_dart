@@ -229,6 +229,7 @@ class WebhookConfig {
   final bool enablePayloadTransformation;
   final Map<String, dynamic>? defaultPayload;
   final List<String> allowedContentTypes;
+  final String basePath;
 
   const WebhookConfig({
     this.timeout = const Duration(seconds: 30),
@@ -238,6 +239,7 @@ class WebhookConfig {
     this.enablePayloadTransformation = false,
     this.defaultPayload,
     this.allowedContentTypes = const ['application/json'],
+    this.basePath = 'webhook',
   });
 
   /// Create fast webhook configuration
@@ -271,9 +273,18 @@ class WebhookConfig {
     );
   }
 
+  /// Create test webhook configuration (uses webhook-test endpoint)
+  factory WebhookConfig.test() {
+    return const WebhookConfig(
+      basePath: 'webhook-test',
+      maxRetries: 2,
+    );
+  }
+
   @override
   String toString() {
-    return 'WebhookConfig(timeout: $timeout, '
+    return 'WebhookConfig(basePath: $basePath, '
+        'timeout: $timeout, '
         'maxRetries: $maxRetries, '
         'validation: $enablePayloadValidation)';
   }

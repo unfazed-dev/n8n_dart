@@ -97,6 +97,65 @@ n8n provides two webhook URL formats:
 
 **For integration tests:** Always use **production URLs**.
 
+### 5. ⚠️ CRITICAL: Test Webhooks vs Production Webhooks
+
+**IMPORTANT:** The n8n_dart library now supports **configurable webhook base paths** to prevent accidental production webhook usage during testing.
+
+#### Problem (Fixed in v1.0.0)
+Previously, all tests were hitting **production webhook URLs** (`/webhook/`) instead of test webhook URLs (`/webhook-test/`), resulting in:
+- ❌ Unnecessary execution costs
+- ❌ Production data pollution
+- ❌ Difficult to distinguish test vs real executions
+
+#### Solution
+Use `WebhookConfig.test()` or configure `basePath: 'webhook-test'`:
+
+```dart
+// For production (default)
+final prodConfig = N8nServiceConfig(
+  baseUrl: 'https://n8n.example.com',
+  webhook: WebhookConfig(), // Uses 'webhook' by default
+);
+
+// For testing (RECOMMENDED)
+final testConfig = N8nServiceConfig(
+  baseUrl: 'https://n8n.example.com',
+  webhook: WebhookConfig.test(), // Uses 'webhook-test'
+);
+
+// Or explicit configuration
+final customConfig = N8nServiceConfig(
+  baseUrl: 'https://n8n.example.com',
+  webhook: WebhookConfig(basePath: 'webhook-test'),
+);
+```
+
+#### Test Helper (Automatic)
+The `createTestClient()` helper automatically uses test webhooks:
+
+```dart
+// Automatically uses WebhookConfig.test()
+final client = createTestClient();
+// Triggers: https://kinly.app.n8n.cloud/webhook-test/test/simple
+```
+
+#### Manual Testing
+To manually test with test webhooks:
+
+```bash
+# Test webhook (requires "Execute Workflow" button click in n8n UI first)
+curl -X POST "https://kinly.app.n8n.cloud/webhook-test/test/simple" \
+  -H "Content-Type: application/json" \
+  -d '{"test": "data"}'
+
+# Production webhook (always available when workflow is active)
+curl -X POST "https://kinly.app.n8n.cloud/webhook/test/simple" \
+  -H "Content-Type: application/json" \
+  -d '{"test": "data"}'
+```
+
+**For integration tests:** Always use **test webhooks** (`/webhook-test/`) to avoid production costs.
+
 ---
 
 ## Implementation Changes Made

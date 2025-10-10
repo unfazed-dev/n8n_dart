@@ -28,12 +28,17 @@ N8nClient createTestClient([TestConfig? config]) {
   config ??= TestConfig.load();
 
   // Use development profile if no API key, otherwise production
-  final clientConfig = config.apiKey != null && config.apiKey!.isNotEmpty
+  final baseConfig = config.apiKey != null && config.apiKey!.isNotEmpty
       ? N8nConfigProfiles.production(
           baseUrl: config.baseUrl,
           apiKey: config.apiKey!,
         )
       : N8nConfigProfiles.development(baseUrl: config.baseUrl);
+
+  // Override webhook config to use test webhook endpoint
+  final clientConfig = baseConfig.copyWith(
+    webhook: WebhookConfig.test(),
+  );
 
   return N8nClient(config: clientConfig);
 }
@@ -52,12 +57,17 @@ ReactiveN8nClient createTestReactiveClient([TestConfig? config]) {
   config ??= TestConfig.load();
 
   // Use development profile if no API key, otherwise production
-  final clientConfig = config.apiKey != null && config.apiKey!.isNotEmpty
+  final baseConfig = config.apiKey != null && config.apiKey!.isNotEmpty
       ? N8nConfigProfiles.production(
           baseUrl: config.baseUrl,
           apiKey: config.apiKey!,
         )
       : N8nConfigProfiles.development(baseUrl: config.baseUrl);
+
+  // Override webhook config to use test webhook endpoint
+  final clientConfig = baseConfig.copyWith(
+    webhook: WebhookConfig.test(),
+  );
 
   return ReactiveN8nClient(config: clientConfig);
 }

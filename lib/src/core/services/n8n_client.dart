@@ -74,7 +74,7 @@ class N8nClient {
 
     // Step 1: Trigger workflow via webhook
     try {
-      final webhookUrl = Uri.parse('${config.baseUrl}/webhook/$webhookPath');
+      final webhookUrl = Uri.parse('${config.baseUrl}/${config.webhook.basePath}/$webhookPath');
       final headers = {
         'Content-Type': 'application/json',
         'Accept': 'application/json',

@@ -500,7 +500,7 @@ class ReactiveN8nClient {
 
     try {
       // Step 1: Trigger workflow via webhook
-      final webhookUrl = Uri.parse('${config.baseUrl}/webhook/$webhookPath');
+      final webhookUrl = Uri.parse('${config.baseUrl}/${config.webhook.basePath}/$webhookPath');
       final headers = {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
