@@ -4,7 +4,7 @@
   "version": 1.0,
   "nodes": [
     {
-      "id": "1760098916447_165",
+      "id": "1760177471452_165",
       "name": "Registration Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1,
@@ -19,7 +19,7 @@
       }
     },
     {
-      "id": "1760098916447_166",
+      "id": "1760177471452_166",
       "name": "Validate Input",
       "type": "n8n-nodes-base.function",
       "typeVersion": 1,
@@ -32,7 +32,7 @@
       }
     },
     {
-      "id": "1760098916447_167",
+      "id": "1760177471452_167",
       "name": "Save User",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 1,
@@ -52,7 +52,7 @@
       }
     },
     {
-      "id": "1760098916447_168",
+      "id": "1760177471452_168",
       "name": "Generate Token",
       "type": "n8n-nodes-base.function",
       "typeVersion": 1,
@@ -65,7 +65,7 @@
       }
     },
     {
-      "id": "1760098916447_169",
+      "id": "1760177471452_169",
       "name": "Send Welcome Email",
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 1,
@@ -81,7 +81,7 @@
       }
     },
     {
-      "id": "1760098916447_170",
+      "id": "1760177471452_170",
       "name": "Return Success",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,

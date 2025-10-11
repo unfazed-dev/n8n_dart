@@ -13,6 +13,7 @@
 /// Exit codes:
 /// - 0: All validations passed
 /// - 1: Validation failed
+library;
 
 import 'dart:io';
 
@@ -102,7 +103,7 @@ void main() async {
     }
 
     // Final summary
-    print('\n' + '=' * 60);
+    print('\n${'=' * 60}');
     if (hasErrors) {
       print('❌ Environment validation FAILED');
       print('=' * 60);

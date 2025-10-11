@@ -13,6 +13,7 @@
 /// Exit codes:
 /// - 0: All workflows verified successfully
 /// - 1: One or more workflows missing or inactive
+library;
 
 import 'dart:io';
 

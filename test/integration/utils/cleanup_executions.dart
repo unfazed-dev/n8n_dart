@@ -16,6 +16,7 @@
 /// Exit codes:
 /// - 0: Cleanup completed successfully
 /// - 1: Error during cleanup
+library;
 
 import 'dart:convert';
 import 'dart:io';

@@ -13,6 +13,7 @@
 /// Exit codes:
 /// - 0: Report generated successfully
 /// - 1: Error generating report
+library;
 
 import 'dart:convert';
 import 'dart:io';

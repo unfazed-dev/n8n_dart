@@ -4,7 +4,7 @@
   "version": 1.0,
   "nodes": [
     {
-      "id": "1760098916499_896",
+      "id": "1760177471497_896",
       "name": "Chat Endpoint",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1,
@@ -19,7 +19,7 @@
       }
     },
     {
-      "id": "1760098916499_897",
+      "id": "1760177471497_897",
       "name": "Parse Input",
       "type": "n8n-nodes-base.function",
       "typeVersion": 1,
@@ -32,7 +32,7 @@
       }
     },
     {
-      "id": "1760098916499_898",
+      "id": "1760177471497_898",
       "name": "AI Response",
       "type": "n8n-nodes-base.function",
       "typeVersion": 1,
@@ -45,7 +45,7 @@
       }
     },
     {
-      "id": "1760098916499_899",
+      "id": "1760177471497_899",
       "name": "Send Response",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
