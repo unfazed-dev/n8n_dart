@@ -64,12 +64,9 @@ ReactiveN8nClient createTestReactiveClient([TestConfig? config]) {
         )
       : N8nConfigProfiles.development(baseUrl: config.baseUrl);
 
-  // Override webhook config to use test webhook endpoint
-  final clientConfig = baseConfig.copyWith(
-    webhook: WebhookConfig.test(),
-  );
-
-  return ReactiveN8nClient(config: clientConfig);
+  // Use default webhook config (basePath: 'webhook' for production n8n cloud)
+  // The production profile already has the correct webhook config
+  return ReactiveN8nClient(config: baseConfig);
 }
 
 /// Waits for a workflow execution to reach a specific status
