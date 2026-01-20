@@ -841,8 +841,6 @@ dart test --tags=integration test/integration/
 - 62s execution time
 
 **Documentation:**
-- [Integration Test Plan](test/integration/docs/INTEGRATION_TESTS_PLAN.md) - Complete 6-phase implementation plan
-- [Phase 6 Summary](test/integration/docs/PHASE_6_SUMMARY.md) - Comprehensive validation report
 - [Test Setup Guide](test/integration/README.md) - Setup instructions and workflow configuration
 
 ## 📄 License
@@ -865,5 +863,3 @@ Contributions welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for guidel
 - [n8nui/examples](https://github.com/n8nui/examples) - Architectural inspiration
 
 ---
-
-**Made with ❤️ for the Dart and Flutter community**
