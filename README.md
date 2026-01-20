@@ -1,6 +1,5 @@
 # n8n_dart
 
-[![Pub Version](https://img.shields.io/pub/v/n8n_dart)](https://pub.dev/packages/n8n_dart)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 Production-ready Dart package for **n8n workflow automation** integration. Works with both pure Dart applications and Flutter mobile/web apps.
